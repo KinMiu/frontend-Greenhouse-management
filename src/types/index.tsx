@@ -58,3 +58,14 @@ export type StaffFormType = {
   email: string;
   password: string;
 };
+
+export type StaffType = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: string;
+  createdAt: string;
+  staffRoleId: string;
+  staffRoles: string;
+};

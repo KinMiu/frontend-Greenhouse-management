@@ -2,21 +2,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import Badge from "@/src/components/ui/badge";
 import Button from "@/src/components/ui/button";
 import GenericFormModal, {
   FormFieldConfig,
 } from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
-import {ALL_PERMISSIONS} from "@/src/data/permissions";
 import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
-import {useGetGreenhouseStaff} from "@/src/hooks/use-staff";
 import {
-  useCreateStaffRole,
-  useDeleteStaffRole,
-  useGetGreenhouseStaffRoles,
-  useUpdateStaffRole,
-} from "@/src/hooks/use-staffRole";
-import {GreenhousesType, StaffRoleType} from "@/src/types";
+  useCreateStaff,
+  useDeleteStaff,
+  useGetGreenhouseStaff,
+  useUpdateStaff,
+} from "@/src/hooks/use-staff";
+import {useGetGreenhouseStaffRoles} from "@/src/hooks/use-staffRole";
+import {GreenhousesType, StaffType} from "@/src/types";
 import {motion} from "framer-motion";
 import {Edit, Trash2} from "lucide-react";
 import {useEffect, useState} from "react";
@@ -26,28 +26,19 @@ import z from "zod";
 const StaffSchema = z.object({
   name: z.string().min(2, "Fullname is required"),
   email: z.email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .or(z.literal("")),
+  idStaffRole: z.string().optional().or(z.literal("")),
 });
 
-type StaffRoleFormType = z.infer<typeof StaffSchema>;
-
-const StaffRoleField: FormFieldConfig[] = [
-  {
-    name: "name",
-    label: "Name",
-    placeholder: "Name",
-  },
-  {
-    name: "email",
-    label: "Email",
-    placeholder: "Email",
-  },
-];
+type StaffFormType = z.infer<typeof StaffSchema>;
 
 export default function StaffRolePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedData, setSelectedData] = useState<
-    (StaffRoleFormType & {id: string}) | null
+    (StaffFormType & {id: string}) | null
   >(null);
   const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
 
@@ -67,18 +58,29 @@ export default function StaffRolePage() {
   }, [greenhouses, selectedGreenhouseId]);
 
   const {
+    data: staffRoles = [],
+    isLoading: isLoadingStaffRoles,
+    isError: isErrorStaffRoles,
+    error: errorStaffRoles,
+  } = useGetGreenhouseStaffRoles(selectedGreenhouseId);
+
+  // console.log("Staff Role", staffRoles);
+
+  const {
     data: staff = [],
-    isLoading: isLoadingRoles,
-    isError: isErrorRoles,
-    error: errorRoles,
+    isLoading: isLoadingStaff,
+    isError: isErrorStaff,
+    error: errorStaff,
   } = useGetGreenhouseStaff(selectedGreenhouseId);
 
-  const createMutation = useCreateStaffRole();
-  const updateMutation = useUpdateStaffRole();
-  const deleteMutation = useDeleteStaffRole();
+  // console.log("Staff", staff);
 
-  if (isErrorRoles) {
-    toast.error(errorGreenhouse?.message || "Failed to fetch users");
+  const createMutation = useCreateStaff();
+  const updateMutation = useUpdateStaff();
+  const deleteMutation = useDeleteStaff();
+
+  if (isErrorStaff) {
+    toast.error(errorStaff?.message || "Failed to fetch users");
   }
 
   if (isErrorGreenhouse) {
@@ -94,7 +96,7 @@ export default function StaffRolePage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (row: StaffRoleType) => {
+  const handleOpenEdit = (row: StaffType) => {
     if (!selectedGreenhouseId) {
       toast.warning("Please select a greenhouse first!");
       return;
@@ -102,16 +104,15 @@ export default function StaffRolePage() {
     setSelectedData({
       id: row.id,
       name: row.name,
-      idGreenhouse: row.idGreenhouse,
-      description: row.description,
-      permissions: row.permissions,
+      email: row.email,
+      idStaffRole: row.staffRoleId,
     });
     setIsModalOpen(true);
   };
 
-  const handleSubmitForm = (data: StaffRoleFormType) => {
+  const handleSubmitForm = (data: StaffFormType) => {
+    console.log(data);
     if (selectedData) {
-      console.log(selectedData);
       updateMutation.mutate(
         {id: selectedData.id, idGreenhouse: selectedGreenhouseId, ...data},
         {
@@ -155,10 +156,48 @@ export default function StaffRolePage() {
     }
   };
 
-  const columns: TableColumn<StaffRoleType>[] = [
+  const staffRoleConfig = staffRoles.data?.map((role: any) => ({
+    label: role.name,
+    value: role.id,
+  }));
+
+  const StaffField: FormFieldConfig[] = [
+    {
+      name: "name",
+      label: "Name",
+      placeholder: "Name",
+    },
+    {
+      name: "email",
+      label: "Email",
+      placeholder: "Email",
+    },
+    {
+      name: "idStaffRole",
+      label: "Assign Role",
+      type: "select",
+      options: staffRoleConfig,
+    },
+  ];
+
+  const columns: TableColumn<StaffType>[] = [
     {header: "Name", accessor: "name"},
-    // {header: "Email", accessor: "email"},
-    {header: "Description", accessor: "description"},
+    {header: "Email", accessor: "email"},
+    {
+      header: "Staff Role",
+      cell: (row) => {
+        const staffRole = row.staffRoles;
+        return (
+          <>
+            {staffRole === null ? (
+              <Badge color="red">No Role</Badge>
+            ) : (
+              <Badge color="green">{staffRole?.name}</Badge>
+            )}
+          </>
+        );
+      },
+    },
     {
       header: "Created At",
       cell: (row) => {
@@ -183,30 +222,30 @@ export default function StaffRolePage() {
         );
       },
     },
-    {
-      header: "Updated At",
-      cell: (row) => {
-        // console.log(user);
-        const date = new Date(row.updatedAt);
-        const tanggal = date.toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
+    // {
+    //   header: "Updated At",
+    //   cell: (row) => {
+    //     // console.log(user);
+    //     const date = new Date(row.updatedAt);
+    //     const tanggal = date.toLocaleDateString("id-ID", {
+    //       day: "2-digit",
+    //       month: "2-digit",
+    //       year: "numeric",
+    //     });
 
-        // const jam = date.toLocaleTimeString("id-ID", {
-        //   hour: "2-digit",
-        //   minute: "2-digit",
-        //   second: "2-digit",
-        // });
-        return (
-          <div className="flex flex-row gap-2">
-            <p>{tanggal}</p>
-            {/* <p>{jam}</p> */}
-          </div>
-        );
-      },
-    },
+    //     // const jam = date.toLocaleTimeString("id-ID", {
+    //     //   hour: "2-digit",
+    //     //   minute: "2-digit",
+    //     //   second: "2-digit",
+    //     // });
+    //     return (
+    //       <div className="flex flex-row gap-2">
+    //         <p>{tanggal}</p>
+    //         {/* <p>{jam}</p> */}
+    //       </div>
+    //     );
+    //   },
+    // },
     {
       header: "Action",
       className: "text-right",
@@ -273,7 +312,7 @@ export default function StaffRolePage() {
         <Table
           columns={columns}
           data={staff}
-          isLoading={isLoadingRoles}
+          isLoading={isLoadingStaff}
           emptyMessage="No users found"
         />
       </motion.div>
@@ -281,17 +320,18 @@ export default function StaffRolePage() {
       <GenericFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedData ? "Edit Greenhouse" : "Add Greenhouse"}
+        title={selectedData ? "Edit Staff" : "Add Staff"}
         schema={StaffSchema}
-        fields={StaffRoleField}
+        fields={StaffField}
         defaultValues={
           selectedData
             ? {
                 name: selectedData.name,
-                description: selectedData.description,
-                permissions: selectedData.permissions,
+                email: selectedData.email,
+                password: "",
+                idStaffRole: selectedData.idStaffRole || "",
               }
-            : {name: "", description: "", permissions: []}
+            : {name: "", email: "", password: "", idStaffRole: ""}
         }
         onSubmit={handleSubmitForm}
         isLoading={isPending}

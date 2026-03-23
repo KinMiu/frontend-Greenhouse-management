@@ -1,8 +1,8 @@
 import {apiFetch} from "../lib/api";
-import {StaffFormType, StaffRoleFormType, UserType} from "../types";
+import {StaffFormType, StaffRoleFormType, StaffType, UserType} from "../types";
 
 export const GetGreenhouseStaff = async (id: string) => {
-  return apiFetch<UserType[]>(`/staff/${id}/my-staff`, {
+  return apiFetch<StaffType[]>(`/staff/${id}/my-staff`, {
     method: "GET",
   });
 };
@@ -17,7 +17,7 @@ export const CreateStaff = async (
   });
 };
 
-export const UpdateStaffRole = async (
+export const UpdateStaff = async (
   id: string,
   idGreenhouse: string,
   data: StaffRoleFormType,
@@ -28,7 +28,7 @@ export const UpdateStaffRole = async (
   });
 };
 
-export const DeleteStaffRole = async (id: string, idGreenhouse: string) => {
+export const DeleteStaff = async (id: string, idGreenhouse: string) => {
   return apiFetch(`/staff-roles/${idGreenhouse}/${id}`, {
     method: "DELETE",
   });

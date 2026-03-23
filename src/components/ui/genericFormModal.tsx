@@ -11,7 +11,7 @@ export interface FormFieldConfig {
   name: string;
   label: string;
   placeholder?: string;
-  type?: React.HTMLInputTypeAttribute;
+  type?: React.HTMLInputTypeAttribute | "checkbox-group" | "select";
   options?: {label: string; value: string}[];
 }
 
@@ -96,6 +96,19 @@ export default function GenericFormModal<T extends z.ZodType<any, any, any>>({
                   </label>
                 ))}
               </div>
+            ) : field.type === "select" && field.options ? (
+              <select
+                id={field.name}
+                {...register(field.name as any)}
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="">Choose a role...</option>
+                {field.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             ) : (
               <Input
                 id={field.name}
@@ -110,12 +123,13 @@ export default function GenericFormModal<T extends z.ZodType<any, any, any>>({
               />
             )}
 
-            {field.type === "checkbox-group" &&
-              errors[field.name as keyof FormData] && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors[field.name as keyof FormData]?.message as string}
-                </p>
-              )}
+            {field.type === "checkbox-group" ||
+              (field.type === "select" &&
+                errors[field.name as keyof FormData] && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors[field.name as keyof FormData]?.message as string}
+                  </p>
+                ))}
           </div>
         ))}
 
