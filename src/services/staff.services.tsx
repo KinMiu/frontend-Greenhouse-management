@@ -20,16 +20,16 @@ export const CreateStaff = async (
 export const UpdateStaff = async (
   id: string,
   idGreenhouse: string,
-  data: StaffRoleFormType,
+  data: StaffFormType,
 ) => {
-  return apiFetch(`/staff-roles/${idGreenhouse}/${id}`, {
+  return apiFetch(`/staff/${idGreenhouse}/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
 };
 
 export const DeleteStaff = async (id: string, idGreenhouse: string) => {
-  return apiFetch(`/staff-roles/${idGreenhouse}/${id}`, {
+  return apiFetch(`/staff/${idGreenhouse}/${id}`, {
     method: "DELETE",
   });
 };

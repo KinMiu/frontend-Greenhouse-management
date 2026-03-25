@@ -8,38 +8,95 @@ import GenericFormModal, {
   FormFieldConfig,
 } from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
-import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
 import {
-  useCreateStaff,
-  useDeleteStaff,
-  useGetGreenhouseStaff,
-  useUpdateStaff,
-} from "@/src/hooks/use-staff";
-import {useGetGreenhouseStaffRoles} from "@/src/hooks/use-staffRole";
-import {GreenhousesType, StaffType} from "@/src/types";
+  useCreateDevice,
+  useDeleteDevice,
+  useGetGreenhouseDevice,
+  useUpdateDevice,
+} from "@/src/hooks/use-device";
+import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
+import {DeviceType, GreenhousesType} from "@/src/types";
 import {motion} from "framer-motion";
 import {Edit, Trash2} from "lucide-react";
 import {useEffect, useState} from "react";
 import {toast} from "sonner";
 import z from "zod";
 
-const StaffSchema = z.object({
-  name: z.string().min(2, "Fullname is required"),
-  email: z.email("Invalid email address"),
-  password: z
+const DeviceSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters").trim(),
+  type: z.enum(["SENSOR", "ACTUATOR"], {
+    required_error: "Device type is required",
+    invalid_type_error: "Type must be either Sensor of Actuator",
+  }),
+  macAddress: z
     .string()
-    .min(8, "Password must be at least 8 characters")
-    .or(z.literal(""))
-    .optional(),
-  staffRoleId: z.string().optional().or(z.literal("")),
+    .regex(
+      /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+      "Invalid MAC Address format",
+    ),
+  status: z.enum(["ONLINE", "OFFLINE", "ERROR"]).optional(),
+  areaId: z.string().optional().nullable(),
 });
 
-type StaffFormType = z.infer<typeof StaffSchema>;
+type DeviceFormType = z.infer<typeof DeviceSchema>;
 
-export default function StaffRolePage() {
+const statusDevice = [
+  {label: "Online", value: "ONLINE"},
+  {label: "Offline", value: "OFFLINE"},
+  {label: "Error", value: "ERROR"},
+];
+
+const typeDevice = [
+  {label: "Sensor", value: "SENSOR"},
+  {label: "Actuator", value: "ACTUATOR"},
+];
+
+const typeOptions = typeDevice.map((opt) => ({
+  label: opt.label,
+  value: opt.value,
+}));
+
+const statusOptions = statusDevice.map((opt) => ({
+  label: opt.label,
+  value: opt.value,
+}));
+
+const DevicesField: FormFieldConfig[] = [
+  {
+    name: "name",
+    label: "Name",
+    placeholder: "e.g., Operator, Admin",
+  },
+  {
+    name: "macAddress",
+    label: "Mac Address",
+    placeholder:
+      "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+  },
+  {
+    name: "type",
+    label: "Type",
+    type: "select",
+    options: typeOptions,
+  },
+  {
+    name: "status",
+    label: "Status",
+    type: "select",
+    options: statusOptions,
+  },
+  {
+    name: "areaId",
+    label: "Area ID",
+    placeholder:
+      "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+  },
+];
+
+export default function DevicePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedData, setSelectedData] = useState<
-    (StaffFormType & {id: string}) | null
+    (DeviceFormType & {id: string}) | null
   >(null);
   const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
 
@@ -50,46 +107,33 @@ export default function StaffRolePage() {
     error: errorGreenhouse,
   } = useGetMyGreenhouses();
 
-  console.log(greenhouses);
+  // console.log(greenhouses.data?.length);
 
   useEffect(() => {
-    if (greenhouses.length > 0 && selectedGreenhouseId === "") {
-      setSelectedGreenhouseId(greenhouses[0].id);
+    if (greenhouses.data?.length > 0 && selectedGreenhouseId === "") {
+      setSelectedGreenhouseId(greenhouses.data[0].id);
     }
   }, [greenhouses, selectedGreenhouseId]);
 
   const {
-    data: staffRoles = [],
-    // isLoading: isLoadingStaffRoles,
-    isError: isErrorStaffRoles,
-    error: errorStaffRoles,
-  } = useGetGreenhouseStaffRoles(selectedGreenhouseId);
+    data: devices = [],
+    isLoading: isLoadingDevices,
+    isError: isErrorDevices,
+    error: errorDevices,
+  } = useGetGreenhouseDevice(selectedGreenhouseId);
 
-  // console.log("Staff Role", staffRoles);
+  console.log(devices);
 
-  const {
-    data: staff = [],
-    isLoading: isLoadingStaff,
-    isError: isErrorStaff,
-    error: errorStaff,
-  } = useGetGreenhouseStaff(selectedGreenhouseId);
+  const createMutation = useCreateDevice();
+  const updateMutation = useUpdateDevice();
+  const deleteMutation = useDeleteDevice();
 
-  // console.log("Staff", staff);
-
-  const createMutation = useCreateStaff();
-  const updateMutation = useUpdateStaff();
-  const deleteMutation = useDeleteStaff();
-
-  if (isErrorStaff) {
-    toast.error(errorStaff?.message || "Failed to fetch users");
+  if (isErrorDevices) {
+    toast.error(errorDevices?.message || "Failed to fetch users");
   }
 
   if (isErrorGreenhouse) {
     toast.error(errorGreenhouse.message || "Failed to fetch greenhouses");
-  }
-
-  if (isErrorStaffRoles) {
-    toast.error(errorStaffRoles.message || "Failed to fetch greenhouses");
   }
 
   const handleOpenAdd = () => {
@@ -101,7 +145,7 @@ export default function StaffRolePage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (row: StaffType) => {
+  const handleOpenEdit = (row: DeviceType) => {
     if (!selectedGreenhouseId) {
       toast.warning("Please select a greenhouse first!");
       return;
@@ -109,15 +153,17 @@ export default function StaffRolePage() {
     setSelectedData({
       id: row.id,
       name: row.name,
-      email: row.email,
-      staffRoleId: row.staffRoleId,
+      type: row.type,
+      macAddress: row.macAddress,
+      status: "OFFLINE",
+      areaId: row.areaId,
     });
     setIsModalOpen(true);
   };
 
-  const handleSubmitForm = (data: StaffFormType) => {
-    console.log(data);
+  const handleSubmitForm = (data: DeviceFormType) => {
     if (selectedData) {
+      console.log(selectedData);
       updateMutation.mutate(
         {id: selectedData.id, idGreenhouse: selectedGreenhouseId, ...data},
         {
@@ -146,12 +192,12 @@ export default function StaffRolePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this staff?")) {
+    if (confirm("Are you sure you want to delete this greenhouse?")) {
       deleteMutation.mutate(
         {id: id, idGreenhouse: selectedGreenhouseId},
         {
           onSuccess: (res: any) => {
-            toast.success(res.message || "taff deleted successfully");
+            toast.success(res.message || "Greenhouse deleted successfully");
           },
           onError: (error: any) => {
             toast.error(error.message);
@@ -161,45 +207,36 @@ export default function StaffRolePage() {
     }
   };
 
-  const staffRoleConfig = staffRoles.data?.map((role: any) => ({
-    label: role.name,
-    value: role.id,
-  }));
-
-  const StaffField: FormFieldConfig[] = [
-    {
-      name: "name",
-      label: "Name",
-      placeholder: "Name",
-    },
-    {
-      name: "email",
-      label: "Email",
-      placeholder: "Email",
-    },
-    {
-      name: "staffRoleId",
-      label: "Assign Role",
-      type: "select",
-      options: staffRoleConfig,
-    },
-  ];
-
-  const columns: TableColumn<StaffType>[] = [
+  const columns: TableColumn<DeviceType>[] = [
     {header: "Name", accessor: "name"},
-    {header: "Email", accessor: "email"},
+    // {header: "Email", accessor: "email"},
     {
-      header: "Staff Role",
+      header: "Type",
       cell: (row) => {
-        const staffRole = row.staffRoles;
+        console.log(row);
         return (
-          <>
-            {staffRole === null ? (
-              <Badge color="red">No Role</Badge>
-            ) : (
-              <Badge color="green">{staffRole?.name}</Badge>
-            )}
-          </>
+          <Badge color={`${row.type === "SENSOR" ? "green" : "gray"}`}>
+            {row.type}
+          </Badge>
+        );
+      },
+    },
+    {
+      header: "Status",
+      cell: (row) => {
+        console.log(row);
+        return (
+          <Badge
+            color={
+              row.status === "ONLINE"
+                ? "green"
+                : row.status === "ERROR"
+                  ? "red"
+                  : "gray"
+            }
+          >
+            {row.status}
+          </Badge>
         );
       },
     },
@@ -227,30 +264,30 @@ export default function StaffRolePage() {
         );
       },
     },
-    // {
-    //   header: "Updated At",
-    //   cell: (row) => {
-    //     // console.log(user);
-    //     const date = new Date(row.updatedAt);
-    //     const tanggal = date.toLocaleDateString("id-ID", {
-    //       day: "2-digit",
-    //       month: "2-digit",
-    //       year: "numeric",
-    //     });
+    {
+      header: "Updated At",
+      cell: (row) => {
+        // console.log(user);
+        const date = new Date(row.updatedAt);
+        const tanggal = date.toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
 
-    //     // const jam = date.toLocaleTimeString("id-ID", {
-    //     //   hour: "2-digit",
-    //     //   minute: "2-digit",
-    //     //   second: "2-digit",
-    //     // });
-    //     return (
-    //       <div className="flex flex-row gap-2">
-    //         <p>{tanggal}</p>
-    //         {/* <p>{jam}</p> */}
-    //       </div>
-    //     );
-    //   },
-    // },
+        // const jam = date.toLocaleTimeString("id-ID", {
+        //   hour: "2-digit",
+        //   minute: "2-digit",
+        //   second: "2-digit",
+        // });
+        return (
+          <div className="flex flex-row gap-2">
+            <p>{tanggal}</p>
+            {/* <p>{jam}</p> */}
+          </div>
+        );
+      },
+    },
     {
       header: "Action",
       className: "text-right",
@@ -282,8 +319,10 @@ export default function StaffRolePage() {
       <div className="flex justify-between items-center">
         <div>
           {/* Teks diperbaiki */}
-          <h1 className="text-2xl font-bold text-gray-800">Staff Management</h1>
-          <p className="text-gray-500">Manage your greenhouse staff</p>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Staff Role Management
+          </h1>
+          <p className="text-gray-500">Manage your greenhouse staff role</p>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -304,7 +343,7 @@ export default function StaffRolePage() {
 
         {/* Tombol ADD ditekuk untuk membuka Modal, bukan pindah halaman */}
         <Button variant="primary" onClick={handleOpenAdd}>
-          + Add New Staff
+          + Add New Staff Role
         </Button>
       </div>
       <motion.div
@@ -314,8 +353,8 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={staff}
-          isLoading={isLoadingStaff}
+          data={devices}
+          isLoading={isLoadingDevices}
           emptyMessage="No users found"
         />
       </motion.div>
@@ -323,18 +362,25 @@ export default function StaffRolePage() {
       <GenericFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedData ? "Edit Staff" : "Add Staff"}
-        schema={StaffSchema}
-        fields={StaffField}
+        title={selectedData ? "Edit Device" : "Add Device"}
+        schema={DeviceSchema}
+        fields={DevicesField}
         defaultValues={
           selectedData
             ? {
                 name: selectedData.name,
-                email: selectedData.email,
-                password: "",
-                staffRoleId: selectedData.staffRoleId || "",
+                type: selectedData.type,
+                macAddress: selectedData.macAddress,
+                status: selectedData.status,
+                areaId: selectedData.areaId,
               }
-            : {name: "", email: "", password: "", staffRoleId: ""}
+            : {
+                name: "",
+                type: "SENSOR",
+                macAddress: "",
+                status: "OFFLINE",
+                areaId: "",
+              }
         }
         onSubmit={handleSubmitForm}
         isLoading={isPending}

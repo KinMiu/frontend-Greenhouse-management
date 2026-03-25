@@ -56,7 +56,8 @@ export type StaffRoleFormType = {
 export type StaffFormType = {
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  staffRoleId?: string;
 };
 
 export type StaffType = {
@@ -68,4 +69,23 @@ export type StaffType = {
   createdAt: string;
   staffRoleId: string;
   staffRoles: string;
+};
+
+export type DeviceType = {
+  id: string;
+  name: string;
+  type: "SENSOR" | "ACTUATOR";
+  macAddress: string;
+  status: "ONLINE" | "OFFLINE" | "ERROR";
+  areaId?: string;
+  createdAt: string;
+  greenhouse: [];
+};
+
+export type DeviceFromType = {
+  name: string;
+  type: "SENSOR" | "ACTUATOR";
+  macAddress: string;
+  status: "ONLINE" | "OFFLINE" | "ERROR";
+  areaId?: string;
 };

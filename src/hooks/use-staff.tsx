@@ -25,7 +25,7 @@ export const useCreateStaff = () => {
     }: {idGreenhouse: string} & StaffFormType) =>
       CreateStaff(idGreenhouse, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ["greenhouses"]});
+      queryClient.invalidateQueries({queryKey: ["staff"]});
     },
   });
 };
@@ -37,10 +37,10 @@ export const useUpdateStaff = () => {
       id,
       idGreenhouse,
       ...data
-    }: {id: string; idGreenhouse: string} & StaffRoleFormType) =>
-      UpdateStaff(id, idGreenhouse, data as StaffRoleFormType),
+    }: {id: string; idGreenhouse: string} & StaffFormType) =>
+      UpdateStaff(id, idGreenhouse, data as StaffFormType),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ["greenhouses"]});
+      queryClient.invalidateQueries({queryKey: ["staff"]});
     },
   });
 };
@@ -51,7 +51,7 @@ export const useDeleteStaff = () => {
     mutationFn: ({id, idGreenhouse}: {id: string; idGreenhouse: string}) =>
       DeleteStaff(id, idGreenhouse),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ["greenhouses"]});
+      queryClient.invalidateQueries({queryKey: ["staff"]});
     },
   });
 };
