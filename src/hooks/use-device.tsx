@@ -5,6 +5,7 @@ import {
   CreateDevice,
   DeleteDevice,
   GetGreenhouseDevice,
+  GetGreenhouseDeviceDetails,
   UpdateDevice,
 } from "../services/device.services";
 
@@ -13,6 +14,15 @@ export const useGetGreenhouseDevice = (id: string) => {
     queryKey: ["devices", id],
     queryFn: () => GetGreenhouseDevice(id),
     enabled: !!id,
+  });
+};
+
+export const useGetGreenhouseDeviceDetails = (deviceId: string) => {
+  console.log("dari hooks", deviceId);
+  return useQuery({
+    queryKey: ["device", deviceId],
+    queryFn: () => GetGreenhouseDeviceDetails(deviceId),
+    // enabled: !!deviceId,
   });
 };
 

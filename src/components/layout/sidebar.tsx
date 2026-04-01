@@ -27,6 +27,7 @@ const ROLE_MENUS = {
     {name: "Staff", href: "/dashboard/staff", icon: User},
     {name: "Staff Role", href: "/dashboard/staff-role", icon: UserCog},
     {name: "Device", href: "/dashboard/device", icon: UserCog},
+    {name: "Area", href: "/dashboard/area", icon: UserCog},
   ],
   superadmin: [
     {name: "Dashboard", href: "/dashboard", icon: LayoutDashboard},

@@ -74,9 +74,7 @@ export type StaffType = {
 export type DeviceType = {
   id: string;
   name: string;
-  type: "SENSOR" | "ACTUATOR";
   macAddress: string;
-  status: "ONLINE" | "OFFLINE" | "ERROR";
   areaId?: string;
   createdAt: string;
   greenhouse: [];
@@ -84,8 +82,21 @@ export type DeviceType = {
 
 export type DeviceFromType = {
   name: string;
-  type: "SENSOR" | "ACTUATOR";
   macAddress: string;
-  status: "ONLINE" | "OFFLINE" | "ERROR";
   areaId?: string;
+};
+
+export type AreaType = {
+  id: string;
+  idGreenhouse: string;
+  name: string;
+  description?: string | undefined;
+  permissions: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type AreaFormType = {
+  name: string;
+  description?: string | undefined;
 };

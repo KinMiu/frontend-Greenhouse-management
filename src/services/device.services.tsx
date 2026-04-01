@@ -7,6 +7,13 @@ export const GetGreenhouseDevice = async (id: string) => {
   });
 };
 
+export const GetGreenhouseDeviceDetails = async (deviceId: string) => {
+  console.log("dari service", deviceId);
+  return apiFetch<DeviceType[]>(`/device/${deviceId}`, {
+    method: "GET",
+  });
+};
+
 export const CreateDevice = async (
   idGreenhouse: string,
   data: DeviceFromType,

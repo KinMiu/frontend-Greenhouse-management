@@ -2,65 +2,50 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import Badge from "@/src/components/ui/badge";
 import Button from "@/src/components/ui/button";
 import GenericFormModal, {
   FormFieldConfig,
 } from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
 import {
-  useCreateDevice,
-  useDeleteDevice,
-  useGetGreenhouseDevice,
-  useUpdateDevice,
-} from "@/src/hooks/use-device";
+  useCreateArea,
+  useDeleteArea,
+  useGetGreenhouseAreas,
+  useUpdateArea,
+} from "@/src/hooks/use-area";
 import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
-import {DeviceType, GreenhousesType} from "@/src/types";
+import {AreaType, GreenhousesType} from "@/src/types";
 import {motion} from "framer-motion";
-import {Edit, Eye, Trash2} from "lucide-react";
-import {useRouter} from "next/navigation";
+import {Edit, Trash2} from "lucide-react";
 import {useEffect, useState} from "react";
 import {toast} from "sonner";
 import z from "zod";
 
-const DeviceSchema = z.object({
+const AreaSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").trim(),
-  macAddress: z
-    .string()
-    .regex(
-      /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
-      "Invalid MAC Address format",
-    ),
-  areaId: z.string().optional().nullable(),
+  description: z.string().optional(),
 });
 
-type DeviceFormType = z.infer<typeof DeviceSchema>;
+type AreaFormType = z.infer<typeof AreaSchema>;
 
-const DevicesField: FormFieldConfig[] = [
+const AreaField: FormFieldConfig[] = [
   {
     name: "name",
-    label: "Name",
-    placeholder: "e.g., Operator, Admin",
+    label: "Area Name",
+    placeholder: "e.g., Area 1",
   },
   {
-    name: "macAddress",
-    label: "Mac Address",
-    placeholder:
-      "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
-  },
-  {
-    name: "areaId",
-    label: "Area ID",
+    name: "description",
+    label: "Description",
     placeholder:
       "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
   },
 ];
 
-export default function DevicePage() {
-  const router = useRouter();
+export default function StaffRolePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedData, setSelectedData] = useState<
-    (DeviceFormType & {id: string}) | null
+    (AreaFormType & {id: string}) | null
   >(null);
   const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
 
@@ -71,6 +56,8 @@ export default function DevicePage() {
     error: errorGreenhouse,
   } = useGetMyGreenhouses();
 
+  console.log(greenhouses.data?.length);
+
   useEffect(() => {
     if (greenhouses.data?.length > 0 && selectedGreenhouseId === "") {
       setSelectedGreenhouseId(greenhouses.data[0].id);
@@ -78,20 +65,18 @@ export default function DevicePage() {
   }, [greenhouses, selectedGreenhouseId]);
 
   const {
-    data: devices = [],
-    isLoading: isLoadingDevices,
-    isError: isErrorDevices,
-    error: errorDevices,
-  } = useGetGreenhouseDevice(selectedGreenhouseId);
+    data: areas = [],
+    isLoading: isLoadingAreas,
+    isError: isErrorAreas,
+    error: errorAreas,
+  } = useGetGreenhouseAreas(selectedGreenhouseId);
 
-  console.log(devices);
+  const createMutation = useCreateArea();
+  const updateMutation = useUpdateArea();
+  const deleteMutation = useDeleteArea();
 
-  const createMutation = useCreateDevice();
-  const updateMutation = useUpdateDevice();
-  const deleteMutation = useDeleteDevice();
-
-  if (isErrorDevices) {
-    toast.error(errorDevices?.message || "Failed to fetch users");
+  if (isErrorAreas) {
+    toast.error(errorAreas?.message || "Failed to fetch users");
   }
 
   if (isErrorGreenhouse) {
@@ -107,7 +92,7 @@ export default function DevicePage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (row: DeviceType) => {
+  const handleOpenEdit = (row: AreaType) => {
     if (!selectedGreenhouseId) {
       toast.warning("Please select a greenhouse first!");
       return;
@@ -115,15 +100,12 @@ export default function DevicePage() {
     setSelectedData({
       id: row.id,
       name: row.name,
-      type: row.type,
-      macAddress: row.macAddress,
-      status: "OFFLINE",
-      areaId: row.areaId,
+      description: row.description,
     });
     setIsModalOpen(true);
   };
 
-  const handleSubmitForm = (data: DeviceFormType) => {
+  const handleSubmitForm = (data: AreaFormType) => {
     if (selectedData) {
       console.log(selectedData);
       updateMutation.mutate(
@@ -169,11 +151,13 @@ export default function DevicePage() {
     }
   };
 
-  const columns: TableColumn<DeviceType>[] = [
+  const columns: TableColumn<AreaType>[] = [
     {header: "Name", accessor: "name"},
+    {header: "Description", accessor: "description"},
     {
       header: "Created At",
       cell: (row) => {
+        // console.log(user);
         const date = new Date(row.createdAt);
         const tanggal = date.toLocaleDateString("id-ID", {
           day: "2-digit",
@@ -181,6 +165,11 @@ export default function DevicePage() {
           year: "numeric",
         });
 
+        // const jam = date.toLocaleTimeString("id-ID", {
+        //   hour: "2-digit",
+        //   minute: "2-digit",
+        //   second: "2-digit",
+        // });
         return (
           <div className="flex flex-row gap-2">
             <p>{tanggal}</p>
@@ -219,14 +208,6 @@ export default function DevicePage() {
       cell: (row) => (
         <div className="flex items-center justify-end gap-2">
           <Button
-            onClick={() => router.push(`/dashboard/device/${row.id}`)}
-            variant="ghost"
-            className="p-2 text-blue-600 hover:bg-blue-50"
-            title="View Detail"
-          >
-            <Eye className="w-4 h-4" />
-          </Button>
-          <Button
             onClick={() => handleOpenEdit(row)}
             variant="ghost"
             className="p-2 text-blue-600 hover:bg-blue-50"
@@ -252,10 +233,8 @@ export default function DevicePage() {
       <div className="flex justify-between items-center">
         <div>
           {/* Teks diperbaiki */}
-          <h1 className="text-2xl font-bold text-gray-800">
-            Device Management
-          </h1>
-          <p className="text-gray-500">Manage your greenhouse devices</p>
+          <h1 className="text-2xl font-bold text-gray-800">Areas Management</h1>
+          <p className="text-gray-500">Manage your greenhouse Area</p>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -276,7 +255,7 @@ export default function DevicePage() {
 
         {/* Tombol ADD ditekuk untuk membuka Modal, bukan pindah halaman */}
         <Button variant="primary" onClick={handleOpenAdd}>
-          + Add New Device
+          + Add New Area
         </Button>
       </div>
       <motion.div
@@ -286,8 +265,8 @@ export default function DevicePage() {
       >
         <Table
           columns={columns}
-          data={devices}
-          isLoading={isLoadingDevices}
+          data={areas}
+          isLoading={isLoadingAreas}
           emptyMessage="No users found"
         />
       </motion.div>
@@ -295,25 +274,16 @@ export default function DevicePage() {
       <GenericFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedData ? "Edit Device" : "Add Device"}
-        schema={DeviceSchema}
-        fields={DevicesField}
+        title={selectedData ? "Edit Area" : "Add Area"}
+        schema={AreaSchema}
+        fields={AreaField}
         defaultValues={
           selectedData
             ? {
                 name: selectedData.name,
-                type: selectedData.type,
-                macAddress: selectedData.macAddress,
-                status: selectedData.status,
-                areaId: selectedData.areaId,
+                description: selectedData.description,
               }
-            : {
-                name: "",
-                type: "SENSOR",
-                macAddress: "",
-                status: "OFFLINE",
-                areaId: "",
-              }
+            : {name: "", description: ""}
         }
         onSubmit={handleSubmitForm}
         isLoading={isPending}
