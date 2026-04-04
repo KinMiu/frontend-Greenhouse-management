@@ -8,6 +8,7 @@ import GenericFormModal, {
   FormFieldConfig,
 } from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
+import {useGetGreenhouseAreas} from "@/src/hooks/use-area";
 import {
   useCreateDevice,
   useDeleteDevice,
@@ -36,26 +37,6 @@ const DeviceSchema = z.object({
 
 type DeviceFormType = z.infer<typeof DeviceSchema>;
 
-const DevicesField: FormFieldConfig[] = [
-  {
-    name: "name",
-    label: "Name",
-    placeholder: "e.g., Operator, Admin",
-  },
-  {
-    name: "macAddress",
-    label: "Mac Address",
-    placeholder:
-      "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
-  },
-  {
-    name: "areaId",
-    label: "Area ID",
-    placeholder:
-      "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
-  },
-];
-
 export default function DevicePage() {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -78,6 +59,13 @@ export default function DevicePage() {
   }, [greenhouses, selectedGreenhouseId]);
 
   const {
+    data: areas = [],
+    isLoading: isLoadingAreas,
+    isError: isErrorAreas,
+    error: errorAreas,
+  } = useGetGreenhouseAreas(selectedGreenhouseId);
+
+  const {
     data: devices = [],
     isLoading: isLoadingDevices,
     isError: isErrorDevices,
@@ -92,6 +80,10 @@ export default function DevicePage() {
 
   if (isErrorDevices) {
     toast.error(errorDevices?.message || "Failed to fetch users");
+  }
+
+  if (isErrorAreas) {
+    toast.error(errorAreas.message || "Failed to fetch greenhouses");
   }
 
   if (isErrorGreenhouse) {
@@ -169,6 +161,31 @@ export default function DevicePage() {
     }
   };
 
+  const areasConfig = areas.data?.map((area: any) => ({
+    label: area.name,
+    value: area.id,
+  }));
+
+  const DevicesField: FormFieldConfig[] = [
+    {
+      name: "name",
+      label: "Name",
+      placeholder: "e.g., Operator, Admin",
+    },
+    {
+      name: "macAddress",
+      label: "Mac Address",
+      placeholder:
+        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+    },
+    {
+      name: "areaId",
+      label: "Area ID",
+      type: "select",
+      options: areasConfig,
+    },
+  ];
+
   const columns: TableColumn<DeviceType>[] = [
     {header: "Name", accessor: "name"},
     {
@@ -219,7 +236,9 @@ export default function DevicePage() {
       cell: (row) => (
         <div className="flex items-center justify-end gap-2">
           <Button
-            onClick={() => router.push(`/dashboard/device/${row.id}`)}
+            onClick={() =>
+              router.push(`/dashboard/device/${selectedGreenhouseId}/${row.id}`)
+            }
             variant="ghost"
             className="p-2 text-blue-600 hover:bg-blue-50"
             title="View Detail"

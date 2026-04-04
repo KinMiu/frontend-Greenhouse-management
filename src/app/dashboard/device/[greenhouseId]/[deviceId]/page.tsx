@@ -1,26 +1,59 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import {useParams, useRouter} from "next/navigation";
-import {
-  ArrowLeft,
-  Cpu,
-  Wifi,
-  MapPin,
-  Activity,
-  Thermometer,
-  Droplets,
-  Settings,
-} from "lucide-react";
+import {Cpu, Wifi, MapPin, Activity, Trash2, Edit} from "lucide-react";
 import Button from "@/src/components/ui/button";
-import Badge from "@/src/components/ui/badge";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
-// import { useGetDeviceDetail } from "@/src/hooks/use-device";
+import z from "zod";
+import GenericFormModal, {
+  FormFieldConfig,
+} from "@/src/components/ui/genericFormModal";
+import {toast} from "sonner";
+import {useState} from "react";
+import {
+  useCreateDeviceComponents,
+  useDeleteDeviceComponents,
+  useUpdateDeviceComponents,
+} from "@/src/hooks/use-deviceComponents";
+import {DeviceComponentsType} from "@/src/types";
+
+const deviceType = [
+  {
+    name: "Sensor",
+    value: "SENSOR",
+  },
+  {
+    name: "Actuator",
+    value: "ACTUATOR",
+  },
+];
+
+const DeviceComponentsSchema = z.object({
+  name: z
+    .string({required_error: "Name is required"})
+    .min(2, "Name must be at least 2 characters")
+    .trim(),
+  type: z.enum(["SENSOR", "ACTUATOR"], {
+    required_error: "Type is required",
+    invalid_type_error: "Type must be exactly 'SENSOR' or 'ACTUATOR'",
+  }),
+  category: z.string().nullish(),
+  unit: z.string().nullish(),
+  pin: z.string().nullish(),
+});
+
+type DeviceComponentsFormType = z.infer<typeof DeviceComponentsSchema>;
 
 export default function DeviceDetailPage() {
   const params = useParams();
-  const router = useRouter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedData, setSelectedData] = useState<
+    (DeviceComponentsFormType & {id: string}) | null
+  >(null);
 
   const deviceId = params.deviceId as string;
+  const greenhouseId = params.greenhouseId as string;
 
   const {
     data: devices = [],
@@ -28,14 +61,15 @@ export default function DeviceDetailPage() {
     isError: isErrorDevices,
     error: errorDevices,
   } = useGetGreenhouseDeviceDetails(deviceId);
-  console.log(devices);
 
-  const greenhouseId = params.greenhouseId as string;
+  if (isErrorDevices) {
+    toast.error(errorDevices?.message || "Failed to fetch devices");
+  }
 
-  // TODO: Ganti dengan hook fetch data asli kamu
-  // const { data: device, isLoading } = useGetDeviceDetail(greenhouseId, deviceId);
+  const createMutation = useCreateDeviceComponents();
+  const updateMutation = useUpdateDeviceComponents();
+  const deleteMutation = useDeleteDeviceComponents();
 
-  // --- MOCK DATA UNTUK UI ---
   let device = devices.data;
 
   if (isLoadingDevices) {
@@ -68,6 +102,125 @@ export default function DeviceDetailPage() {
 
   console.log(device);
 
+  const handleOpenAdd = () => {
+    if (!greenhouseId) {
+      toast.warning("Please select a greenhouse first!");
+      return;
+    }
+    setSelectedData(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (row: DeviceComponentsType) => {
+    if (!greenhouseId) {
+      toast.warning("Please select a greenhouse first!");
+      return;
+    }
+    setSelectedData({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      category: row.category,
+      unit: row.unit,
+      pin: row.pin,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmitForm = (data: DeviceComponentsFormType) => {
+    if (selectedData) {
+      console.log(selectedData);
+      updateMutation.mutate(
+        {
+          componentId: selectedData.id,
+          deviceId: deviceId,
+          idGreenhouse: greenhouseId,
+          ...data,
+        },
+        {
+          onSuccess: (res: any) => {
+            toast.success(res.message || "Greenhouse updated successfully");
+            setIsModalOpen(false);
+            window.location.reload();
+          },
+          onError: (err: any) => toast.error(err.message),
+        },
+      );
+    } else {
+      createMutation.mutate(
+        {
+          idDevice: deviceId,
+          idGreenhouse: greenhouseId,
+          ...data,
+        },
+        {
+          onSuccess: (res: any) => {
+            toast.success(res.message || "Greenhouse created successfully");
+            setIsModalOpen(false);
+            window.location.reload();
+          },
+          onError: (err: any) => toast.error(err.message),
+        },
+      );
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to delete this greenhouse?")) {
+      deleteMutation.mutate(
+        {componentId: id, deviceId: deviceId, idGreenhouse: greenhouseId},
+        {
+          onSuccess: (res: any) => {
+            toast.success(res.message || "Greenhouse deleted successfully");
+            window.location.reload();
+          },
+          onError: (error: any) => {
+            toast.error(error.message);
+          },
+        },
+      );
+    }
+  };
+
+  const typeDevice = deviceType.map((type) => ({
+    label: type.name,
+    value: type.value,
+  }));
+
+  const DevicesField: FormFieldConfig[] = [
+    {
+      name: "name",
+      label: "Name",
+      placeholder: "e.g., Operator, Admin",
+    },
+    {
+      name: "type",
+      label: "Type",
+      type: "select",
+      options: typeDevice,
+    },
+    {
+      name: "category",
+      label: "Category",
+      placeholder:
+        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+    },
+    {
+      name: "unit",
+      label: "Unit",
+      placeholder:
+        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+    },
+    {
+      name: "pin",
+      label: "Pin",
+      placeholder:
+        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+    },
+  ];
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div className="space-y-6">
       {/* 1. Header & Breadcrumb Navigation */}
@@ -99,7 +252,7 @@ export default function DeviceDetailPage() {
             ></span>
           </span>
           <span className="text-sm font-semibold text-gray-700">
-            {device.status}
+            {device.status === "ONLINE" ? "Online" : "Offline"}
           </span>
         </div>
       </div>
@@ -156,15 +309,18 @@ export default function DeviceDetailPage() {
                 <Cpu className="w-5 h-5 text-green-500" />
                 Device Components
               </h2>
-              <Button variant="primary" className="text-sm py-1.5 px-3">
+              <Button
+                onClick={handleOpenAdd}
+                variant="primary"
+                className="text-sm py-1.5 px-3"
+              >
                 + Add Component
               </Button>
             </div>
 
             {/* List Components */}
             <div className="space-y-3">
-              {device.components.map((comp) => {
-                const IconComponent = comp.icon;
+              {device.components.map((comp: any) => {
                 return (
                   <div
                     key={comp.id}
@@ -194,6 +350,22 @@ export default function DeviceDetailPage() {
                         {comp.status}
                       </p>
                     </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        onClick={() => handleOpenEdit(comp)}
+                        variant="ghost"
+                        className="p-2 text-blue-600 hover:bg-blue-50"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        onClick={() => handleDelete(comp.id)}
+                        variant="ghost"
+                        className="p-2 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -207,6 +379,33 @@ export default function DeviceDetailPage() {
           </div>
         </div>
       </div>
+      <GenericFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={selectedData ? "Edit Device" : "Add Device"}
+        schema={DeviceComponentsSchema}
+        fields={DevicesField}
+        defaultValues={
+          selectedData
+            ? {
+                name: selectedData.name,
+                type: selectedData.type,
+                category: selectedData.category || "",
+                unit: selectedData.unit || "",
+                pin: selectedData.pin || "",
+              }
+            : {
+                name: "",
+                type: "SENSOR",
+                category: "",
+                unit: "",
+                pin: "",
+              }
+        }
+        onSubmit={handleSubmitForm}
+        isLoading={isPending}
+        submitText={selectedData ? "Save Changes" : "Create"}
+      />
     </div>
   );
 }

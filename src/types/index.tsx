@@ -100,3 +100,25 @@ export type AreaFormType = {
   name: string;
   description?: string | undefined;
 };
+
+export type DeviceComponentsType = {
+  id: string;
+  name: string;
+  type: "SENSOR" | "ACTUATOR";
+  category?: string;
+  unit: string;
+  pin: string;
+  createdAt: Date;
+};
+
+export type DeviceComponentsFormType = {
+  name: string;
+  type: "SENSOR" | "ACTUATOR";
+  category?: string | null | undefined;
+  unit?: string | null | undefined;
+  pin?: string | null | undefined;
+};
+
+export type ToggleActuatorFormType = {
+  name: boolean;
+};
