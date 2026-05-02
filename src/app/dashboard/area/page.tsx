@@ -76,7 +76,7 @@ export default function StaffRolePage() {
   const deleteMutation = useDeleteArea();
 
   if (isErrorAreas) {
-    toast.error(errorAreas?.message || "Failed to fetch users");
+    toast.error(errorAreas?.message || "Failed to fetch areas");
   }
 
   if (isErrorGreenhouse) {
@@ -265,7 +265,7 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={areas}
+          data={areas.data || []}
           isLoading={isLoadingAreas}
           emptyMessage="No users found"
         />

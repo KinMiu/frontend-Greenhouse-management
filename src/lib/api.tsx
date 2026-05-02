@@ -9,6 +9,7 @@ export async function apiFetch<T>(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "x-api-key": process.env.NEXT_PUBLIC_API_KEY || "",
     ...((options?.headers as Record<string, string>) || {}),
   };
 
@@ -22,8 +23,14 @@ export async function apiFetch<T>(
   });
 
   if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.message || "Request failed");
+    let errorMessage = "Request failed";
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.message || errorData;
+    } catch (e) {
+      console.log("Failed to parse JSON from backend");
+    }
+    throw new Error(errorMessage || "Request failed");
   }
 
   return res.json();

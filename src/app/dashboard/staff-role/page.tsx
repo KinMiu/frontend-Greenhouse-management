@@ -295,7 +295,7 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={staffRoles}
+          data={staffRoles.data || []}
           isLoading={isLoadingRoles}
           emptyMessage="No users found"
         />

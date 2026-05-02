@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import {motion} from "framer-motion";
@@ -35,7 +36,8 @@ export default function SignInPage() {
     SignInMutation.mutate(data, {
       onSuccess: (res: any) => {
         localStorage.setItem("accessToken", res.data.token);
-        localStorage.setItem("userData", res.data.user);
+        const userData = JSON.stringify(res.data.user);
+        localStorage.setItem("userData", userData);
         // console.log(res);
         toast.success("Sign in Successfully");
         return router.push("/dashboard");

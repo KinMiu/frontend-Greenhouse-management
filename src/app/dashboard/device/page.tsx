@@ -2,7 +2,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import Badge from "@/src/components/ui/badge";
 import Button from "@/src/components/ui/button";
 import GenericFormModal, {
   FormFieldConfig,
@@ -79,15 +78,15 @@ export default function DevicePage() {
   const deleteMutation = useDeleteDevice();
 
   if (isErrorDevices) {
-    toast.error(errorDevices?.message || "Failed to fetch users");
+    toast.error(errorDevices?.message || "Failed to fetch Devices");
   }
 
   if (isErrorAreas) {
-    toast.error(errorAreas.message || "Failed to fetch greenhouses");
+    toast.error(errorAreas.message || "Failed to fetch Areas");
   }
 
   if (isErrorGreenhouse) {
-    toast.error(errorGreenhouse.message || "Failed to fetch greenhouses");
+    toast.error(errorGreenhouse.message || "Failed to fetch Greenhouses");
   }
 
   const handleOpenAdd = () => {
@@ -122,7 +121,7 @@ export default function DevicePage() {
         {id: selectedData.id, idGreenhouse: selectedGreenhouseId, ...data},
         {
           onSuccess: (res: any) => {
-            toast.success(res.message || "Greenhouse updated successfully");
+            toast.success(res.message || "Device updated successfully");
             setIsModalOpen(false);
           },
           onError: (err: any) => toast.error(err.message),
@@ -136,7 +135,7 @@ export default function DevicePage() {
         },
         {
           onSuccess: (res: any) => {
-            toast.success(res.message || "Greenhouse created successfully");
+            toast.success(res.message || "Device created successfully");
             setIsModalOpen(false);
           },
           onError: (err: any) => toast.error(err.message),
@@ -146,12 +145,12 @@ export default function DevicePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this greenhouse?")) {
+    if (confirm("Are you sure you want to delete this device?")) {
       deleteMutation.mutate(
         {id: id, idGreenhouse: selectedGreenhouseId},
         {
           onSuccess: (res: any) => {
-            toast.success(res.message || "Greenhouse deleted successfully");
+            toast.success(res.message || "Device deleted successfully");
           },
           onError: (error: any) => {
             toast.error(error.message);
@@ -170,18 +169,18 @@ export default function DevicePage() {
     {
       name: "name",
       label: "Name",
-      placeholder: "e.g., Operator, Admin",
+      placeholder: "e.g., ESP32 Sensor Suhu, Node Pompa 1",
     },
     {
       name: "macAddress",
       label: "Mac Address",
-      placeholder:
-        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quae, rerum.",
+      placeholder: "e.g., FF:EE:DD:CC:BB:AA",
     },
     {
       name: "areaId",
       label: "Area ID",
       type: "select",
+      placeholder: "Pilih Area penempatan alat...",
       options: areasConfig,
     },
   ];
@@ -305,7 +304,7 @@ export default function DevicePage() {
       >
         <Table
           columns={columns}
-          data={devices}
+          data={devices.data || []}
           isLoading={isLoadingDevices}
           emptyMessage="No users found"
         />

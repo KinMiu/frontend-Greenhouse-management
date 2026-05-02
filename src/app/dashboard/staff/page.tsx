@@ -169,19 +169,21 @@ export default function StaffRolePage() {
   const StaffField: FormFieldConfig[] = [
     {
       name: "name",
-      label: "Name",
-      placeholder: "Name",
+      label: "Full Name",
+      placeholder: "e.g., John Doe",
     },
     {
       name: "email",
-      label: "Email",
-      placeholder: "Email",
+      label: "Email Address",
+      type: "email",
+      placeholder: "john.doe@company.com",
     },
     {
       name: "staffRoleId",
-      label: "Assign Role",
+      label: "Staff Role",
       type: "select",
       options: staffRoleConfig,
+      placeholder: "Select a role for this staff",
     },
   ];
 
@@ -314,7 +316,7 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={staff}
+          data={staff.data || []}
           isLoading={isLoadingStaff}
           emptyMessage="No users found"
         />

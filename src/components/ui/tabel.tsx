@@ -61,7 +61,7 @@ export default function Table<T>({
               </td>
             </tr>
           ) : (
-            data.data.map((item, rowIndex: string) => (
+            data.map((item, rowIndex: string) => (
               <tr
                 key={rowIndex}
                 className="border-b border-gray-100 last:border-none hover:bg-gray-50/80 transition-colors"

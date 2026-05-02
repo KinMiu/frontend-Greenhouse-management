@@ -1,17 +1,20 @@
 "use client";
 
 import {
+  Cpu,
   Droplet,
   Home,
   LayoutDashboard,
   LogOut,
+  Map,
   Sprout,
   ThermometerSun,
   User,
   UserCog,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
-import {usePathname} from "next/navigation";
+import {usePathname, useRouter} from "next/navigation";
 import Button from "../ui/button";
 
 // type NavItem = {
@@ -24,14 +27,14 @@ const ROLE_MENUS = {
   owner: [
     {name: "Dashboard", href: "/dashboard", icon: LayoutDashboard},
     {name: "Greenhouse", href: "/dashboard/greenhouse", icon: Home},
-    {name: "Staff", href: "/dashboard/staff", icon: User},
+    {name: "Staff", href: "/dashboard/staff", icon: Users},
     {name: "Staff Role", href: "/dashboard/staff-role", icon: UserCog},
-    {name: "Device", href: "/dashboard/device", icon: UserCog},
-    {name: "Area", href: "/dashboard/area", icon: UserCog},
+    {name: "Device", href: "/dashboard/device", icon: Cpu},
+    {name: "Area", href: "/dashboard/area", icon: Map},
   ],
   superadmin: [
     {name: "Dashboard", href: "/dashboard", icon: LayoutDashboard},
-    {name: "User", href: "/dashboard/users", icon: User},
+    {name: "User", href: "/dashboard/users", icon: Users},
   ],
 };
 
@@ -44,9 +47,16 @@ interface SidebarProps {
 }
 
 export default function Sidebar({isOpen, onClose, role}: SidebarProps) {
+  const router = useRouter();
   const pathname = usePathname();
 
   const currentNavItems = ROLE_MENUS[role] || ROLE_MENUS.owner;
+
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("userData");
+    return router.push("/signin");
+  };
 
   return (
     <>
@@ -97,6 +107,7 @@ export default function Sidebar({isOpen, onClose, role}: SidebarProps) {
         </nav>
         <div className="p-4 border-t border-gray-100 shrink-0 mt-auto">
           <Button
+            onClick={handleLogout}
             variant="danger"
             className="flex items-center justify-center gap-3 w-full py-2.5 shadow-sm"
           >

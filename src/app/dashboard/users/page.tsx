@@ -102,7 +102,7 @@ export default function UsersPage() {
       >
         <Table
           columns={columns}
-          data={users.data}
+          data={users.data || []}
           isLoading={isLoading}
           emptyMessage="No users found"
         />

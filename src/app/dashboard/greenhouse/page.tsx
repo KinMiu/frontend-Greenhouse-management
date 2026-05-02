@@ -210,7 +210,7 @@ export default function GreenhousePage() {
       >
         <Table
           columns={columns}
-          data={greenhouses}
+          data={greenhouses.data || []}
           isLoading={isLoading}
           emptyMessage="No users found"
         />
