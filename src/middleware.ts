@@ -6,6 +6,8 @@ export function middleware(request: NextRequest) {
   // console.log("Role", role);
   const {pathname} = request.nextUrl;
 
+  console.log("LOGGED ROLE:", role, "FULL PATH:", pathname);
+
   if (pathname.startsWith("/dashboard/users") && role !== "SUPER_ADMIN") {
     return NextResponse.redirect(new URL("/signin", request.url));
   }
