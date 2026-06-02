@@ -11,6 +11,7 @@ export const SignUp = async (data: SignUpType) => {
 export const SignIn = async (data: SignInType) => {
   return apiFetch("/auth/", {
     method: "POST",
+    credentials: "include",
     body: JSON.stringify(data),
   });
 };

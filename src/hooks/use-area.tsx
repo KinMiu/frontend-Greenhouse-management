@@ -4,6 +4,7 @@ import {AreaFormType} from "../types";
 import {
   CreateArea,
   DeleteArea,
+  GetAreaDetails,
   GetGreenhouseAreas,
   UpdateArea,
 } from "../services/area.services";
@@ -13,6 +14,14 @@ export const useGetGreenhouseAreas = (id: string) => {
     queryKey: ["areas", id],
     queryFn: () => GetGreenhouseAreas(id),
     enabled: !!id,
+  });
+};
+
+export const useGetAreaDetails = (id: string) => {
+  return useQuery({
+    queryKey: ["area_detail", id],
+    queryFn: () => GetAreaDetails(id),
+    // enabled: !!id,
   });
 };
 

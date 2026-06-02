@@ -101,6 +101,14 @@ export type AreaFormType = {
   description?: string | undefined;
 };
 
+export type ConfigFormType = {
+  deviceId: string;
+  componentId: string;
+  action: string;
+  time: string;
+  duration: number;
+};
+
 export type DeviceComponentsType = {
   id: string;
   name: string;

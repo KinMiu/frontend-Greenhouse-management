@@ -1,7 +1,9 @@
 import {NextRequest, NextResponse} from "next/server";
 
 export function middleware(request: NextRequest) {
-  const role = request.cookies.get("user_role");
+  const roleObj = request.cookies.get("user_role");
+  const role = roleObj?.value;
+  // console.log("Role", role);
   const {pathname} = request.nextUrl;
 
   if (pathname.startsWith("/dashboard/users") && role !== "SUPER_ADMIN") {

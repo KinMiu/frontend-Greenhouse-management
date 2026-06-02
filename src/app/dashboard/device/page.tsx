@@ -165,6 +165,8 @@ export default function DevicePage() {
     value: area.id,
   }));
 
+  console.log(areasConfig);
+
   const DevicesField: FormFieldConfig[] = [
     {
       name: "name",

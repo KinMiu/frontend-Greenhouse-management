@@ -3,9 +3,9 @@
 
 import {useGetGreenhouseAreas} from "@/src/hooks/use-area";
 import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
-import {GreenhousesType} from "@/src/types";
-import {motion} from "framer-motion";
-import {useEffect, useState} from "react";
+import {DeviceType, GreenhousesType} from "@/src/types";
+import {AnimatePresence, motion} from "framer-motion";
+import {useEffect, useMemo, useState} from "react";
 import {
   Activity,
   Cpu,
@@ -17,26 +17,69 @@ import {
   WifiOff,
   Clock,
   Eye,
+  Settings,
+  Plus,
+  Settings2,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import mqtt from "mqtt";
 import {useToggleActuator} from "@/src/hooks/use-deviceComponents";
 import {toast} from "sonner";
 import {useRouter} from "next/navigation";
+import Button from "@/src/components/ui/button";
+import Table, {TableColumn} from "@/src/components/ui/tabel";
+import {
+  useCreateArea,
+  useCreateAutomation,
+  useGetGreenhouseAreasAutomation,
+  useUpdateAutomation,
+} from "@/src/hooks/use-automation";
+import Badge from "@/src/components/ui/badge";
+import GenericFormModal, {
+  FormFieldConfig,
+} from "@/src/components/ui/genericFormModal";
+import z from "zod";
+
+const ConfigSchema = z.object({
+  deviceId: z.string().uuid("Invalid device ID format"),
+  componentId: z.string().uuid("Invalid component ID format"),
+  action: z.string().min(1, "Action is required").trim(),
+  time: z.string().min(1, "Time is required").trim(),
+  duration: z.string().min(1, "Must be a positive number"),
+});
+
+type ConfigFormType = z.infer<typeof ConfigSchema>;
 
 export default function DashboardPage() {
   const router = useRouter();
   const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
+  const [selectedAreaId, setSelectedAreaId] = useState<string>("");
+  const [selectedDeviceIdInForm, setSelectedDeviceIdInForm] =
+    useState<string>("");
+  const [selectedData, setSelectedData] = useState<
+    (ConfigFormType & {id: string}) | null
+  >(null);
   const [realtimeData, setRealtimeData] = useState<{[mac: string]: any}>({});
 
   // 🔥 STATE BARU: Untuk nyatet kapan terakhir alat ngirim data
   const [lastSeen, setLastSeen] = useState<{[mac: string]: number}>({});
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isAddConfigOpen, setIsAddConfigOpen] = useState(false);
   const [now, setNow] = useState(Date.now()); // Stopwatch trigger untuk re-render
 
   const {data: greenhouses = [], isLoading: isLoadingGreenhouse} =
     useGetMyGreenhouses();
   const {data: areas = [], isLoading: isLoadingAreas} =
     useGetGreenhouseAreas(selectedGreenhouseId);
+
+  const {data: automationConfig = [], isLoading: isLoadingConfig} =
+    useGetGreenhouseAreasAutomation(selectedGreenhouseId, selectedAreaId);
+
+  // console.log("id area", selectedAreaId);
   const toggleMutation = useToggleActuator();
+  const createMutation = useCreateAutomation();
+  const updateMutation = useUpdateAutomation();
 
   // 🔥 EFFECT BARU: Stopwatch berdetak tiap 1 detik
   useEffect(() => {
@@ -95,6 +138,15 @@ export default function DashboardPage() {
     toast.info("Fitur riwayat sedang dalam pengembangan");
   };
 
+  const handleOpenedHistory = (idArea: string) => {
+    router.push(`/dashboard/config/${selectedGreenhouseId}/${idArea}`);
+  };
+  const handleOpenedAddConfig = (x: boolean, y: boolean) => {
+    setIsHistoryOpen(y);
+    setIsAddConfigOpen(x);
+    setSelectedData(null);
+  };
+
   const handleToggleActuator = (
     deviceId: string,
     macAddress: string,
@@ -132,6 +184,187 @@ export default function DashboardPage() {
       },
     );
   };
+
+  const handleSubmitForm = (data: DeviceFormType) => {
+    if (selectedData) {
+      console.log("cek ini selectedData", selectedData);
+      updateMutation.mutate(
+        {id: selectedData.id, idGreenhouse: selectedGreenhouseId, ...data},
+        {
+          onSuccess: (res: any) => {
+            toast.success(res.message || "Config updated successfully");
+            handleOpenedAddConfig([], false, true);
+          },
+          onError: (err: any) => toast.error(err.message),
+        },
+      );
+    } else {
+      createMutation.mutate(
+        {
+          idGreenhouse: selectedGreenhouseId,
+          ...data,
+        },
+        {
+          onSuccess: (res: any) => {
+            toast.success(res.message || "Config created successfully");
+            handleOpenedAddConfig([], false, true);
+          },
+          onError: (err: any) => toast.error(err.message),
+        },
+      );
+    }
+  };
+
+  const columns: TableColumn<DeviceType>[] = [
+    {
+      header: "Device",
+      cell: (row) => (
+        <span className="text-[10px] text-gray-400 font-bold uppercase">
+          {row.device.name || "-"}
+        </span>
+      ),
+    },
+    {
+      header: "Component",
+      cell: (row) => (
+        <span className="text-[10px] text-gray-400 font-bold uppercase">
+          {row.component.name || "-"}
+        </span>
+      ),
+    },
+    {header: "Time", accessor: "time"},
+    {header: "Duration", accessor: "duration"},
+    {
+      header: "Status",
+      cell: (row) => {
+        const actionConfig = row.action;
+        return (
+          <>
+            {actionConfig === "OFF" ? (
+              <Badge color="red">{actionConfig}</Badge>
+            ) : (
+              <Badge color="green">{actionConfig}</Badge>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      header: "Action",
+      className: "text-right",
+      cell: (row) => (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            onClick={() =>
+              router.push(`/dashboard/device/${selectedGreenhouseId}/${row.id}`)
+            }
+            variant="ghost"
+            className="p-2 text-blue-600 hover:bg-blue-50"
+            title="View Detail"
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button
+            // onClick={() => handleOpenEdit(row)}
+            variant="ghost"
+            className="p-2 text-blue-600 hover:bg-blue-50"
+          >
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button
+            // onClick={() => handleDelete(row.id)}
+            variant="ghost"
+            className="p-2 text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const getAreaActuator = useMemo(() => {
+    const areaSpesific = areas.data?.find((area) => {
+      return area.id === selectedAreaId;
+    });
+    return (
+      areaSpesific?.devices?.filter(
+        (d: any) =>
+          !d.components?.some((c: any) => c.type === "SENSOR") &&
+          d.components?.some((c: any) => c.type === "ACTUATOR"),
+      ) || []
+    );
+  }, [areas.data, selectedAreaId]);
+  console.log("area", getAreaActuator);
+
+  const deviceConfig = useMemo(() =>
+    getAreaActuator.map((device: any) => ({
+      label: device.name,
+      value: device.id,
+    })),
+  );
+
+  const componentsConfig = useMemo(() => {
+    const activeDevice = getAreaActuator.find(
+      (d: any) => d.id === selectedDeviceIdInForm,
+    );
+    return activeDevice?.components?.map((component: any) => ({
+      label: component.name,
+      value: component.id,
+    }));
+  });
+
+  const activeDevice = getAreaActuator.find(
+    (d: any) => d.id === selectedDeviceIdInForm,
+  );
+
+  // console.log("area saat ini", selectedDeviceIdInForm);
+
+  const ConfigField: FormFieldConfig[] = useMemo(
+    () => [
+      {
+        name: "deviceId",
+        label: "Device",
+        type: "select",
+        placeholder: "Pilih Device...",
+        options: deviceConfig,
+        // Kita tetap butuh ini supaya list component di bawahnya terupdate
+        onChange: (e: any) => setSelectedDeviceIdInForm(e.target.value),
+      },
+      {
+        name: "componentId",
+        label: "Component",
+        type: "select",
+        placeholder: selectedDeviceIdInForm
+          ? "Pilih Komponen..."
+          : "Pilih device dulu",
+        options: componentsConfig,
+        disabled: !selectedDeviceIdInForm,
+      },
+      {
+        name: "action",
+        label: "Action",
+        type: "select", // Biasanya automation action itu pilihan (ON / OFF / TOGGLE)
+        placeholder: "Pilih aksi...",
+        options: [
+          {label: "Turn On", value: "ON"},
+          {label: "Turn Off", value: "OFF"},
+        ],
+      },
+      {
+        name: "time",
+        label: "Execution Time",
+        type: "time", // Menggunakan input type="time" HTML asli
+        placeholder: "Pilih waktu...",
+      },
+      {
+        name: "duration",
+        label: "Duration (Minutes)",
+        placeholder: "Contoh: 10",
+      },
+    ],
+    [deviceConfig, componentsConfig, selectedDeviceIdInForm],
+  );
 
   // 🔥 FUNGSI BARU: Logika penentu status berdasarkan selisih waktu
   const getDeviceStatus = (macAddress: string) => {
@@ -360,6 +593,8 @@ export default function DashboardPage() {
     );
   };
 
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div className="space-y-8 bg-gray-50/30 min-h-screen pb-10">
       {/* Page Header (Sama seperti sebelumnya) */}
@@ -424,6 +659,11 @@ export default function DashboardPage() {
                   <h2 className="text-xl font-bold text-gray-900">
                     {area.name}
                   </h2>
+                  <div className="ms-auto">
+                    <Button onClick={() => handleOpenedHistory(area.id)}>
+                      <Settings />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-12 gap-y-8">
@@ -457,6 +697,111 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </div>
+                <AnimatePresence mode="wait">
+                  {isHistoryOpen ? (
+                    <motion.div
+                      key="history-modal" // Key sangat penting untuk mode="wait"
+                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+                      initial={{opacity: 0}}
+                      animate={{opacity: 1}}
+                      exit={{opacity: 0}}
+                    >
+                      <motion.div
+                        initial={{opacity: 0, scale: 0.95, y: 20}}
+                        animate={{opacity: 1, scale: 1, y: 0}}
+                        exit={{opacity: 0, scale: 0.95, y: 20}}
+                        transition={{duration: 0.2}}
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
+                      >
+                        {/* Header List */}
+                        <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50/50">
+                          <h3 className="font-bold text-gray-800">
+                            Automation Config
+                          </h3>
+                          <button
+                            onClick={() => handleOpenedHistory(false, "")}
+                            className="text-gray-400"
+                          >
+                            <Plus className="w-6 h-6 rotate-45" />
+                          </button>
+                        </div>
+
+                        {/* Content List */}
+                        <div className="p-6">
+                          <div className="max-h-[400px] overflow-y-auto rounded-xl border border-gray-100">
+                            <Table
+                              columns={columns}
+                              data={automationConfig.data || []}
+                              isLoading={isLoadingConfig}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Footer List */}
+                        <div className="px-6 py-4 bg-gray-50 flex justify-end gap-2">
+                          <Button
+                            variant="primary"
+                            onClick={() => handleOpenedAddConfig(true, false)} // Ini akan men-trigger exit modal ini dulu
+                          >
+                            Add Config
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleOpenedHistory(false, "")}
+                          >
+                            Close
+                          </Button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  ) : isAddConfigOpen ? (
+                    <motion.div
+                      key="add-config-modal" // Key unik agar framer tahu ini komponen berbeda
+                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+                      initial={{opacity: 0}}
+                      animate={{opacity: 1}}
+                      exit={{opacity: 0}}
+                    >
+                      <motion.div
+                        initial={{opacity: 0, scale: 0.95, y: 20}}
+                        animate={{opacity: 1, scale: 1, y: 0}}
+                        exit={{opacity: 0, scale: 0.95, y: 20}}
+                        transition={{duration: 0.2}}
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
+                      >
+                        {/* Header Add */}
+                        <GenericFormModal
+                          isOpen={isAddConfigOpen}
+                          onClose={() => handleOpenedAddConfig(false, true)}
+                          title={selectedData ? "Edit Device" : "Add Device"}
+                          schema={ConfigSchema}
+                          fields={ConfigField}
+                          defaultValues={
+                            selectedData
+                              ? {
+                                  deviceId: selectedData.deviceId,
+                                  componentId: selectedData.componentId,
+                                  action: selectedData.action,
+                                  time: selectedData.time,
+                                  // Pastikan duration di-parse ke number jika dari API datang sebagai string
+                                  duration: selectedData.duration,
+                                }
+                              : {
+                                  deviceId: "",
+                                  componentId: "",
+                                  action: "", // atau default "ON"
+                                  time: "00:00",
+                                  duration: "",
+                                }
+                          }
+                          onSubmit={handleSubmitForm}
+                          isLoading={isPending}
+                          submitText={selectedData ? "Save Changes" : "Create"}
+                        />
+                      </motion.div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </div>
             );
           })}

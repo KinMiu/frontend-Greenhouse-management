@@ -7,6 +7,13 @@ export const GetGreenhouseAreas = async (id: string) => {
   });
 };
 
+export const GetAreaDetails = async (id: string) => {
+  console.log("dari service", id);
+  return apiFetch<AreaType[]>(`/areas/${id}`, {
+    method: "GET",
+  });
+};
+
 export const CreateArea = async (idGreenhouse: string, data: AreaFormType) => {
   return apiFetch(`/areas/${idGreenhouse}`, {
     method: "POST",
