@@ -181,7 +181,7 @@ export default function DeviceDetailPage() {
 
     // 1. Pastikan URL & Port benar (Gunakan ws/wss untuk Browser)
     // Pakai port 8083 untuk ws atau 8084 untuk wss
-    const brokerUrl = "ws://195.35.23.135:15675/ws";
+    const brokerUrl = "wss://urken.psti-ubl.id/ws-rabbitmq";
 
     const client = mqtt.connect(brokerUrl, {
       username: "/smk2pkl:smk2iot",

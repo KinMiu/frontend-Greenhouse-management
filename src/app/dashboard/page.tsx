@@ -88,7 +88,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const client = mqtt.connect("ws://195.35.23.135:15675/ws", {
+    const client = mqtt.connect("wss://urken.psti-ubl.id/ws-rabbitmq", {
       username: "/smk2pkl:smk2iot",
       password: "smk2iot",
       clientId: `nextjs_${Math.random().toString(16).slice(3)}`,
