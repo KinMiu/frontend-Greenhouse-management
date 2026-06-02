@@ -56,8 +56,6 @@ export default function StaffRolePage() {
     error: errorGreenhouse,
   } = useGetMyGreenhouses();
 
-  console.log(greenhouses.data?.length);
-
   useEffect(() => {
     if (greenhouses.data?.length > 0 && selectedGreenhouseId === "") {
       setSelectedGreenhouseId(greenhouses.data[0].id);
