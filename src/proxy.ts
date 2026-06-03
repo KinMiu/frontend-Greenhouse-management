@@ -1,6 +1,6 @@
 import {NextRequest, NextResponse} from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const {pathname} = request.nextUrl;
 
   // Membaca custom header X-User-Role yang disuapi langsung oleh Nginx depan
