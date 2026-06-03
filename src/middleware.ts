@@ -1,53 +1,42 @@
 import {NextRequest, NextResponse} from "next/server";
 
-// Fungsi sakti pembongkar payload string JWT tanpa library tambahan
-function decodeJwtPayload(token: string) {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join(""),
-    );
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    return null;
-  }
-}
-
 export function middleware(request: NextRequest) {
   const {pathname} = request.nextUrl;
 
-  // Kita bypass pengecekan cookie biasa, kita tembak langsung lewat HEADER atau TOKEN jika ada
-  const token = request.cookies.get("token")?.value;
+  // Membaca custom header X-User-Role yang disuapi langsung oleh Nginx depan
+  const role = request.headers.get("X-User-Role") || "undefined";
 
-  let role = undefined;
-  if (token) {
-    const payload = decodeJwtPayload(token);
-    // CATATAN: Sesuaikan dengan key role di JWT backend Anda!
-    // Apakah payload.role atau payload.user.role?
-    role = payload?.role || payload?.user?.role;
+  // Log murni untuk memantau pergerakan role di konsol Docker Anda
+  console.log(`[SATPAM PRODUCTION] Role: ${role} | Target Path: ${pathname}`);
+
+  // =========================================================
+  // LOGIKA MENTALIN USER (ROLE-BASED AUTHORIZATION)
+  // =========================================================
+
+  // 1. Proteksi Halaman Khusus Super Admin
+  if (pathname.startsWith("/dashboard/users")) {
+    if (role !== "SUPER_ADMIN") {
+      // Jika bukan super admin, mentalin ke dashboard utama atau signin
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
-  console.log("HASIL DETEKSI JWT -> ROLE:", role, "PATH:", pathname);
-
-  // Jika role masih undefined karena cookie disensor total oleh infra port 80,
-  // Khusus untuk malam ini kita biarkan lolos dulu (NextResponse.next())
-  // agar Anda bisa nge-test dashboard Area, Greenhouse, dan WebSocket RabbitMQ-nya!
-
-  if (pathname.startsWith("/dashboard/users") && role !== "SUPER_ADMIN") {
-    if (role) return NextResponse.redirect(new URL("/signin", request.url));
+  // 2. Proteksi Halaman Manajemen Area & Greenhouse (Khusus OWNER)
+  if (
+    pathname.startsWith("/dashboard/area") ||
+    pathname.startsWith("/dashboard/greenhouse")
+  ) {
+    if (role !== "OWNER" && role !== "SUPER_ADMIN") {
+      // Jika staff biasa iseng mau masuk area, lempar balik ke dashboard
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
-  if (pathname.startsWith("/dashboard/area") && role !== "OWNER") {
-    if (role) return NextResponse.redirect(new URL("/signin", request.url));
-  }
-
+  // Izinkan request berlanjut jika lolos validasi role
   return NextResponse.next();
 }
 
+// Hanya mengunci jalur dashboard agar tidak mengganggu fungsi landing page / signin
 export const config = {
   matcher: "/dashboard/:path*",
 };
