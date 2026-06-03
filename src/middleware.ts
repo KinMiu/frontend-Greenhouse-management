@@ -1,39 +1,48 @@
 import {NextRequest, NextResponse} from "next/server";
 
+// Fungsi sakti pembongkar payload string JWT tanpa library tambahan
+function decodeJwtPayload(token: string) {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(""),
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export function middleware(request: NextRequest) {
   const {pathname} = request.nextUrl;
 
-  // 1. KITA PRINT SEMUA COOKIE YANG BENERAN LOLOS MASUK KE DOCKER
-  const allCookies = request.cookies.getAll();
-  console.log("=== DAFTAR COOKIE YANG TEMBUS KE SERVER ===");
-  if (allCookies.length === 0) {
-    console.log("ZONK! Tidak ada cookie sama sekali yang lolos!");
-  } else {
-    allCookies.forEach((cookie) => {
-      console.log(
-        `-> Nama: ${cookie.name} | Value Ada (Length: ${cookie.value.length})`,
-      );
-    });
-  }
-  console.log("===========================================");
-
-  // 2. Ambil token & role (kalau ada)
+  // Kita bypass pengecekan cookie biasa, kita tembak langsung lewat HEADER atau TOKEN jika ada
   const token = request.cookies.get("token")?.value;
-  const role = request.cookies.get("user_role")?.value;
 
-  console.log("DATA UNTUK REDIRECT -> ROLE:", role, "PATH:", pathname);
+  let role = undefined;
+  if (token) {
+    const payload = decodeJwtPayload(token);
+    // CATATAN: Sesuaikan dengan key role di JWT backend Anda!
+    // Apakah payload.role atau payload.user.role?
+    role = payload?.role || payload?.user?.role;
+  }
 
-  // Jalur aman: biarkan lolos dulu sementara biar Anda bisa nge-test dashboard area
-  if (
-    pathname.startsWith("/dashboard/users") &&
-    role !== "SUPER_ADMIN" &&
-    role !== "OWNER"
-  ) {
-    // return NextResponse.redirect(new URL("/signin", request.url));
+  console.log("HASIL DETEKSI JWT -> ROLE:", role, "PATH:", pathname);
+
+  // Jika role masih undefined karena cookie disensor total oleh infra port 80,
+  // Khusus untuk malam ini kita biarkan lolos dulu (NextResponse.next())
+  // agar Anda bisa nge-test dashboard Area, Greenhouse, dan WebSocket RabbitMQ-nya!
+
+  if (pathname.startsWith("/dashboard/users") && role !== "SUPER_ADMIN") {
+    if (role) return NextResponse.redirect(new URL("/signin", request.url));
   }
 
   if (pathname.startsWith("/dashboard/area") && role !== "OWNER") {
-    // return NextResponse.redirect(new URL("/signin", request.url));
+    if (role) return NextResponse.redirect(new URL("/signin", request.url));
   }
 
   return NextResponse.next();
