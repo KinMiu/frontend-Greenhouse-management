@@ -24,7 +24,7 @@ import Button from "../ui/button";
 // };
 
 const ROLE_MENUS = {
-  owner: [
+  OWNER: [
     {name: "Dashboard", href: "/dashboard", icon: LayoutDashboard},
     {name: "Greenhouse", href: "/dashboard/greenhouse", icon: Home},
     {name: "Staff", href: "/dashboard/staff", icon: Users},
@@ -32,7 +32,7 @@ const ROLE_MENUS = {
     {name: "Device", href: "/dashboard/device", icon: Cpu},
     {name: "Area", href: "/dashboard/area", icon: Map},
   ],
-  superadmin: [
+  SUPER_ADMIN: [
     {name: "Dashboard", href: "/dashboard", icon: LayoutDashboard},
     {name: "User", href: "/dashboard/users", icon: Users},
   ],
@@ -50,7 +50,8 @@ export default function Sidebar({isOpen, onClose, role}: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const currentNavItems = ROLE_MENUS[role] || ROLE_MENUS.owner;
+  const currentRole = role?.toUpperCase() as RoleType;
+  const currentNavItems = ROLE_MENUS[currentRole] || ROLE_MENUS.OWNER;
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
