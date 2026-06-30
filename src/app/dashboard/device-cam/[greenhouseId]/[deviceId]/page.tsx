@@ -39,7 +39,7 @@ export default function DeviceDetailPage() {
     // Sesuaikan URL ini dengan endpoint Gateway Worker yang bertugas melakukan broadcast frame.
     // Jika Gateway Worker awal hanya me-log data, pastikan di Golang-nya kamu juga membuat endpoint
     // untuk frontend, misalnya ws://localhost:8080/ws/viewer
-    const wsUrl = "ws://localhost:8080/ws/viewer"; // Gunakan URL WS milikmu
+    const wsUrl = "wss://urken-gateway.psti-ubl.id/ws/viewer"; // Gunakan URL WS milikmu
 
     const ws = new WebSocket(wsUrl);
 
