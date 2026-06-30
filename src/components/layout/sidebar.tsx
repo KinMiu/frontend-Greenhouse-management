@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import {usePathname, useRouter} from "next/navigation";
 import Button from "../ui/button";
+import {IMAGES} from "@/src/assets";
 
 // type NavItem = {
 //   name: string;
@@ -73,11 +74,20 @@ export default function Sidebar({isOpen, onClose, role}: SidebarProps) {
       <aside
         className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="h-16 flex items-center px-6 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-2 text-green-700">
-            <Sprout className="w-6 h-6" />
-            <span className="text-xl font-bold tracking-wide text-gray-800">
-              Greenhouse
+        <div className="h-20 flex items-center px-6 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Logo Gambar Urken */}
+            <img
+              src={IMAGES.logo}
+              alt="UrKen Logo"
+              className="w-9 h-9 object-contain rounded-lg"
+            />
+            {/* Teks Nama Baru */}
+            <span className="text-lg font-extrabold tracking-wide text-gray-850 leading-tight">
+              The Origin{" "}
+              <span className="text-green-600 block text-xs font-semibold tracking-normal">
+                UrKen Platform
+              </span>
             </span>
           </div>
         </div>
