@@ -11,11 +11,7 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {useSignUp} from "@/src/hooks/use-auth";
 import {useRouter} from "next/navigation";
 import {toast} from "sonner";
-
-// 🚀 LOGO BRANDING URKEN
-export const IMAGES = {
-  logo: new URL("./logo/UrkenLogo.png", import.meta.url).href,
-};
+import {IMAGES} from "@/src/assets";
 
 const SignUpSchema = z.object({
   name: z.string().min(2, "Fullname is required"),

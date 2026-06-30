@@ -18,14 +18,11 @@ export default function DeviceDetailPage() {
   const params = useParams();
   const router = useRouter();
 
-  // -- States untuk Streaming Kamera --
   const [isConnected, setIsConnected] = useState(false);
   const [cameraFrame, setCameraFrame] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
   const prevUrlRef = useRef<string | null>(null);
 
-  // --- DATA DUMMY ---
-  // Karena ini testing dummy, kita buat data statis alih-alih fetch API
   const device = {
     id: params.deviceId as string,
     name: "Kamera Utama (Dummy Worker)",
@@ -34,16 +31,9 @@ export default function DeviceDetailPage() {
     status: "ONLINE",
   };
 
-  // --- WEBSOCKET CONNECTION ---
   useEffect(() => {
-    // Sesuaikan URL ini dengan endpoint Gateway Worker yang bertugas melakukan broadcast frame.
-    // Jika Gateway Worker awal hanya me-log data, pastikan di Golang-nya kamu juga membuat endpoint
-    // untuk frontend, misalnya ws://localhost:8080/ws/viewer
-    const wsUrl = "wss://urken.psti-ubl.id/ws/viewer"; // Gunakan URL WS milikmu
-
+    const wsUrl = "wss://urken.psti-ubl.id/ws/viewer";
     const ws = new WebSocket(wsUrl);
-
-    // Kita beritahu browser bahwa data binary yang datang bentuknya adalah Blob (File)
     ws.binaryType = "blob";
 
     ws.onopen = () => {
@@ -52,45 +42,27 @@ export default function DeviceDetailPage() {
     };
 
     ws.onmessage = (event) => {
-      // Pastikan data yang diterima adalah binary (Blob dari gambar JPEG)
       if (event.data instanceof Blob) {
-        // Hapus URL gambar sebelumnya dari memori browser agar tidak memory leak (RAM penuh)
         if (prevUrlRef.current) {
           URL.revokeObjectURL(prevUrlRef.current);
         }
-
-        // Buat URL lokal untuk blob gambar yang baru masuk
         const newFrameUrl = URL.createObjectURL(event.data);
         setCameraFrame(newFrameUrl);
         prevUrlRef.current = newFrameUrl;
-
-        // Counter untuk animasi indikator live
         setFrameCount((prev) => prev + 1);
-      } else {
-        // Jika data berupa text
-        console.error("Gagal memproses frame dari server:", e);
       }
     };
 
     ws.onclose = (event) => {
       setIsConnected(false);
-
-      // LOG DETAIL PENYEBAB CLOSE
-      console.error("❌ WebSocket Disconnected!");
-      console.log("Code:", event.code); // 1000 = Normal, 1006 = Abnormal (Server crash/Nginx cut)
-      console.log("Reason:", event.reason); // Penjelasan kenapa server mutus
-      console.log("Was Clean:", event.wasClean);
+      console.error("❌ WebSocket Disconnected!", event.code);
     };
 
     ws.onerror = (error) => {
-      // LOG DETAIL ERROR
       console.error("⚠️ WebSocket Error Detail:", error);
-      // Cek apakah browser memberikan info tambahan di event
-      console.log("Target URL:", error.target);
     };
 
     return () => {
-      // Cleanup saat pindah halaman
       ws.close();
       if (prevUrlRef.current) {
         URL.revokeObjectURL(prevUrlRef.current);
@@ -99,131 +71,148 @@ export default function DeviceDetailPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto p-2">
       {/* 1. HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
-            className="p-2 border border-gray-200 bg-white"
+            className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl transition-all"
             onClick={() => router.push(`/dashboard/device`)}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">{device.name}</h1>
-            <p className="text-gray-500 text-sm">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">
+              {device.name}
+            </h1>
+            <p className="text-gray-400 text-xs sm:text-sm">
               Live Real-time Monitoring Stream
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Indikator Status Koneksi */}
+
+        <div className="flex items-center">
           <div
-            className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 border ${isConnected ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"}`}
+            className={`px-3 py-1.5 rounded-full font-bold text-[11px] flex items-center gap-2 border shadow-xs transition-all ${
+              isConnected
+                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                : "bg-rose-50 text-rose-600 border-rose-200"
+            }`}
           >
             <div
-              className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`}
+              className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}
             />
             {isConnected ? "WS CONNECTED" : "WS DISCONNECTED"}
           </div>
         </div>
       </div>
 
-      {/* 2. DEVICE INFO GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <InfoCard
-          label="Hardware MAC"
-          val={device.macAddress}
-          icon={Wifi}
-          color="text-blue-500"
-        />
-        <InfoCard
-          label="Location"
-          val={device.area.name}
-          icon={MapPin}
-          color="text-orange-500"
-        />
-        <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4 shadow-sm">
-          <div className="p-2 rounded-lg bg-gray-50 text-purple-500">
-            <Activity className="w-5 h-5" />
+      {/* ⚙️ FIX LAYOUT: Menggunakan susunan Grid 2 Kolom di Desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* LEFT COLUMN: CAMERA VIEWER (Lebih kompak & proporsional) */}
+        <motion.div
+          initial={{opacity: 0, y: 15}}
+          animate={{opacity: 1, y: 0}}
+          className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden flex flex-col"
+        >
+          <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-zinc-50/50">
+            <h3 className="font-bold text-sm text-gray-700 flex items-center gap-2">
+              <Video className="w-4 h-4 text-blue-500" />
+              Live CCTV Stream
+            </h3>
+            {isConnected && (
+              <span className="text-[9px] bg-rose-500 text-white font-black uppercase tracking-widest px-2 py-0.5 rounded-sm animate-pulse">
+                REC
+              </span>
+            )}
           </div>
-          <div>
-            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-              Total Frames
-            </p>
-            <p className="text-xs font-bold text-gray-700 font-mono mt-0.5">
-              {frameCount} frames received
-            </p>
+
+          {/* 🛠️ FIX AREA VIDEO: Membatasi tinggi maksimal agar tidak kegedean */}
+          <div className="relative w-full aspect-video max-h-[400px] bg-zinc-950 flex items-center justify-center overflow-hidden border-t border-gray-900">
+            {cameraFrame ? (
+              <img
+                src={cameraFrame}
+                alt="Live Camera Stream"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-zinc-500 gap-2 p-6">
+                {isConnected ? (
+                  <>
+                    <Activity className="w-8 h-8 animate-spin text-green-500" />
+                    <p className="text-xs font-medium tracking-wide text-zinc-400">
+                      Decoding incoming binary frames...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-8 h-8 text-zinc-600" />
+                    <p className="text-xs font-medium text-zinc-500">
+                      Stream offline • Awaiting server handshake
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* RIGHT COLUMN: METRICS & SPECIFICATIONS */}
+        <div className="flex flex-col gap-4">
+          <div className="px-1">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+              Device Specifications
+            </h4>
+          </div>
+
+          <InfoCard
+            label="Hardware MAC Address"
+            val={device.macAddress}
+            icon={Wifi}
+            color="text-blue-500 bg-blue-50"
+          />
+          <InfoCard
+            label="Assigned Location"
+            val={device.area.name}
+            icon={MapPin}
+            color="text-orange-500 bg-orange-50"
+          />
+
+          <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-4 shadow-xs">
+            <div className="p-2.5 rounded-lg bg-purple-50 text-purple-500">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                Data Throughput
+              </p>
+              <p className="text-sm font-bold text-gray-700 font-mono mt-0.5">
+                {frameCount.toLocaleString()}{" "}
+                <span className="text-xs font-normal text-gray-400">
+                  frames received
+                </span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* 3. CAMERA STREAM VIEWER */}
-      <motion.div
-        initial={{opacity: 0, y: 20}}
-        animate={{opacity: 1, y: 0}}
-        className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden flex flex-col"
-      >
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <h3 className="font-bold text-gray-700 flex items-center gap-2">
-            <Video className="w-5 h-5 text-blue-500" />
-            Live View
-          </h3>
-          {isConnected && (
-            <span className="text-[10px] bg-red-100 text-red-600 font-black uppercase tracking-wider px-2 py-1 rounded animate-pulse">
-              • LIVE
-            </span>
-          )}
-        </div>
-
-        {/* Area Penampil Gambar */}
-        <div className="relative w-full aspect-video bg-black flex items-center justify-center">
-          {cameraFrame ? (
-            // Jika ada frame yang masuk, tampilkan
-            <img
-              src={cameraFrame}
-              alt="Live Camera Stream"
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            // Jika belum ada data yang masuk
-            <div className="flex flex-col items-center justify-center text-gray-500 gap-3">
-              {isConnected ? (
-                <>
-                  <Activity className="w-10 h-10 animate-pulse text-gray-400" />
-                  <p className="text-sm font-medium">
-                    Waiting for video stream...
-                  </p>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-10 h-10 text-gray-600" />
-                  <p className="text-sm font-medium">
-                    WebSocket is disconnected
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </motion.div>
     </div>
   );
 }
 
-// Komponen InfoCard yang disederhanakan
+// Komponen InfoCard yang disempurnakan styling-nya
 function InfoCard({label, val, icon: Icon, color}: any) {
   return (
-    <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4 shadow-sm">
-      <div className={`p-2 rounded-lg bg-gray-50 ${color}`}>
+    <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-4 shadow-xs hover:border-gray-300 transition-colors">
+      <div className={`p-2.5 rounded-lg ${color}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
         <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
           {label}
         </p>
-        <p className="text-xs font-bold text-gray-700 font-mono mt-0.5">
+        <p className="text-sm font-bold text-gray-700 font-mono mt-0.5 tracking-tight">
           {val}
         </p>
       </div>

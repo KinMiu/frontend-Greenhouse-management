@@ -11,11 +11,7 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {useSignIn} from "@/src/hooks/use-auth";
 import {useRouter} from "next/navigation";
 import {toast} from "sonner";
-
-// 🚀 LOGO BRANDING URKEN
-export const IMAGES = {
-  logo: new URL("./logo/UrkenLogo.png", import.meta.url).href,
-};
+import {IMAGES} from "@/src/assets";
 
 const SignInSchema = z.object({
   email: z.string().email("Invalid email address"),

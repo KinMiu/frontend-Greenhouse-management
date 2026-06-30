@@ -2,11 +2,7 @@
 
 import Link from "next/link";
 import {ArrowRight} from "lucide-react";
-
-// 🚀 LOGO BRANDING URKEN
-export const IMAGES = {
-  logo: new URL("./logo/UrkenLogo.png", import.meta.url).href,
-};
+import {IMAGES} from "../assets";
 
 export default function Home() {
   return (
