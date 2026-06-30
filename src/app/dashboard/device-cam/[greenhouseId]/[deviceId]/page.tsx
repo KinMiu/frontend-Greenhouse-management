@@ -68,17 +68,25 @@ export default function DeviceDetailPage() {
         setFrameCount((prev) => prev + 1);
       } else {
         // Jika data berupa text
-        console.log("Pesan Text dari WS:", event.data);
+        console.error("Gagal memproses frame dari server:", e);
       }
     };
 
-    ws.onclose = () => {
-      console.log("❌ Disconnected from Camera Stream");
+    ws.onclose = (event) => {
       setIsConnected(false);
+
+      // LOG DETAIL PENYEBAB CLOSE
+      console.error("❌ WebSocket Disconnected!");
+      console.log("Code:", event.code); // 1000 = Normal, 1006 = Abnormal (Server crash/Nginx cut)
+      console.log("Reason:", event.reason); // Penjelasan kenapa server mutus
+      console.log("Was Clean:", event.wasClean);
     };
 
     ws.onerror = (error) => {
-      console.error("⚠️ WebSocket Error:", error);
+      // LOG DETAIL ERROR
+      console.error("⚠️ WebSocket Error Detail:", error);
+      // Cek apakah browser memberikan info tambahan di event
+      console.log("Target URL:", error.target);
     };
 
     return () => {
