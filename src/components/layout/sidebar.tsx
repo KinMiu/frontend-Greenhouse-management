@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Camera,
   Cpu,
   Droplet,
   Home,
@@ -30,6 +31,7 @@ const ROLE_MENUS = {
     {name: "Staff", href: "/dashboard/staff", icon: Users},
     {name: "Staff Role", href: "/dashboard/staff-role", icon: UserCog},
     {name: "Device", href: "/dashboard/device", icon: Cpu},
+    {name: "Device Cam", href: "/dashboard/device-cam", icon: Camera},
     {name: "Area", href: "/dashboard/area", icon: Map},
   ],
   SUPER_ADMIN: [

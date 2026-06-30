@@ -1,5 +1,5 @@
 import {apiFetch} from "../lib/api";
-import {SignInType, SignUpType, UserType} from "../types";
+import {SignInType, SignUpType} from "../types";
 
 export const SignUp = async (data: SignUpType) => {
   return apiFetch("/auth/register-owner", {
