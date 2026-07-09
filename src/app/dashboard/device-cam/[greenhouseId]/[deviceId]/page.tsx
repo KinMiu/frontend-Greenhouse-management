@@ -23,26 +23,34 @@ export default function DeviceDetailPage() {
   const [frameCount, setFrameCount] = useState(0);
   const prevUrlRef = useRef<string | null>(null);
 
+  // Data device dummy
   const device = {
     id: params.deviceId as string,
     name: "Kamera Utama (Dummy Worker)",
-    macAddress: "FF:EE:DD:CC:BB:AA",
+    macAddress: "A4:F0:0F:74:EC:20", // Format MAC dari DB / Device biasanya pakai titik dua
     area: {name: "Area Pemantauan Kamera"},
     status: "ONLINE",
   };
 
   useEffect(() => {
-    const wsUrl = "wss://urken.psti-ubl.id/ws/viewer";
+    // 1. Membersihkan titik dua (:) dari MAC Address agar sinkron dengan format Gateway Go
+    // "A4:F0:0F:74:EC:20" -> "A4F00F74EC20"
+    const cleanMac = device.macAddress.replace(/:/g, "");
+
+    // 2. Sertakan parameter ?mac= sesuai kebutuhan gateway baru
+    const wsUrl = `wss://urken.psti-ubl.id/ws/viewer?mac=${cleanMac}`;
+
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "blob";
 
     ws.onopen = () => {
-      console.log("✅ Connected to Camera Stream WebSocket");
+      console.log(`✅ Connected to Camera Stream WebSocket [MAC: ${cleanMac}]`);
       setIsConnected(true);
     };
 
     ws.onmessage = (event) => {
       if (event.data instanceof Blob) {
+        // Optimasi memori: hapus object URL yang lama sebelum membuat yang baru
         if (prevUrlRef.current) {
           URL.revokeObjectURL(prevUrlRef.current);
         }
@@ -55,6 +63,7 @@ export default function DeviceDetailPage() {
 
     ws.onclose = (event) => {
       setIsConnected(false);
+      setCameraFrame(null); // Kosongkan frame saat terputus
       console.error("❌ WebSocket Disconnected!", event.code);
     };
 
@@ -68,7 +77,7 @@ export default function DeviceDetailPage() {
         URL.revokeObjectURL(prevUrlRef.current);
       }
     };
-  }, []);
+  }, [device.macAddress]); // Ditambahkan dependency macAddress agar aman jika datanya dinamis
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-2">
@@ -108,9 +117,9 @@ export default function DeviceDetailPage() {
         </div>
       </div>
 
-      {/* ⚙️ FIX LAYOUT: Menggunakan susunan Grid 2 Kolom di Desktop */}
+      {/* LAYOUT: Susunan Grid 2 Kolom di Desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* LEFT COLUMN: CAMERA VIEWER (Lebih kompak & proporsional) */}
+        {/* LEFT COLUMN: CAMERA VIEWER */}
         <motion.div
           initial={{opacity: 0, y: 15}}
           animate={{opacity: 1, y: 0}}
@@ -121,14 +130,14 @@ export default function DeviceDetailPage() {
               <Video className="w-4 h-4 text-blue-500" />
               Live CCTV Stream
             </h3>
-            {isConnected && (
+            {isConnected && cameraFrame && (
               <span className="text-[9px] bg-rose-500 text-white font-black uppercase tracking-widest px-2 py-0.5 rounded-sm animate-pulse">
-                REC
+                LIVE
               </span>
             )}
           </div>
 
-          {/* 🛠️ FIX AREA VIDEO: Membatasi tinggi maksimal agar tidak kegedean */}
+          {/* AREA VIDEO */}
           <div className="relative w-full aspect-video max-h-[400px] bg-zinc-950 flex items-center justify-center overflow-hidden border-t border-gray-900">
             {cameraFrame ? (
               <img
@@ -201,7 +210,7 @@ export default function DeviceDetailPage() {
   );
 }
 
-// Komponen InfoCard yang disempurnakan styling-nya
+// Komponen InfoCard
 function InfoCard({label, val, icon: Icon, color}: any) {
   return (
     <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-4 shadow-xs hover:border-gray-300 transition-colors">
