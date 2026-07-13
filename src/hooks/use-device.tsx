@@ -4,15 +4,23 @@ import {DeviceFromType} from "../types";
 import {
   CreateDevice,
   DeleteDevice,
-  GetGreenhouseDevice,
+  GetDevice,
+  GetGreenhouseDeviceByGreenhouse,
   GetGreenhouseDeviceDetails,
   UpdateDevice,
 } from "../services/device.services";
 
-export const useGetGreenhouseDevice = (id: string) => {
+export const useGetAllDevice = () => {
+  return useQuery({
+    queryKey: ["devices"],
+    queryFn: GetDevice,
+  });
+};
+
+export const useGetGreenhouseDeviceByGreenhouse = (id: string) => {
   return useQuery({
     queryKey: ["devices", id],
-    queryFn: () => GetGreenhouseDevice(id),
+    queryFn: () => GetGreenhouseDeviceByGreenhouse(id),
     enabled: !!id,
   });
 };
@@ -29,11 +37,8 @@ export const useGetGreenhouseDeviceDetails = (deviceId: string) => {
 export const useCreateDevice = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      idGreenhouse,
-      ...data
-    }: {idGreenhouse: string} & DeviceFromType) =>
-      CreateDevice(idGreenhouse, data as DeviceFromType),
+    mutationFn: ({...data}: DeviceFromType) =>
+      CreateDevice(data as DeviceFromType),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});
     },

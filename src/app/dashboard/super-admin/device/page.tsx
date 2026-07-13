@@ -2,24 +2,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import Badge from "@/src/components/ui/badge";
 import Button from "@/src/components/ui/button";
 import GenericFormModal, {
   FormFieldConfig,
 } from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
-import {useGetGreenhouseAreas} from "@/src/hooks/use-area";
 import {
   useCreateDevice,
   useDeleteDevice,
-  useGetGreenhouseDeviceByGreenhouse,
+  useGetAllDevice,
   useUpdateDevice,
 } from "@/src/hooks/use-device";
-import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
-import {DeviceType, GreenhousesType} from "@/src/types";
+import {DeviceType} from "@/src/types";
 import {motion} from "framer-motion";
 import {Edit, Eye, Trash2} from "lucide-react";
 import {useRouter} from "next/navigation";
-import {useEffect, useState} from "react";
+import {useState} from "react";
 import {toast} from "sonner";
 import z from "zod";
 
@@ -42,34 +41,13 @@ export default function DevicePage() {
   const [selectedData, setSelectedData] = useState<
     (DeviceFormType & {id: string}) | null
   >(null);
-  const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
-
-  const {
-    data: greenhouses = [],
-    isLoading: isLoadingGreenhouse,
-    isError: isErrorGreenhouse,
-    error: errorGreenhouse,
-  } = useGetMyGreenhouses();
-
-  useEffect(() => {
-    if (greenhouses.data?.length > 0 && selectedGreenhouseId === "") {
-      setSelectedGreenhouseId(greenhouses.data[0].id);
-    }
-  }, [greenhouses, selectedGreenhouseId]);
-
-  const {
-    data: areas = [],
-    isLoading: isLoadingAreas,
-    isError: isErrorAreas,
-    error: errorAreas,
-  } = useGetGreenhouseAreas(selectedGreenhouseId);
 
   const {
     data: devices = [],
     isLoading: isLoadingDevices,
     isError: isErrorDevices,
     error: errorDevices,
-  } = useGetGreenhouseDeviceByGreenhouse(selectedGreenhouseId);
+  } = useGetAllDevice();
 
   console.log(devices);
 
@@ -81,35 +59,18 @@ export default function DevicePage() {
     toast.error(errorDevices?.message || "Failed to fetch Devices");
   }
 
-  if (isErrorAreas) {
-    toast.error(errorAreas.message || "Failed to fetch Areas");
-  }
-
-  if (isErrorGreenhouse) {
-    toast.error(errorGreenhouse.message || "Failed to fetch Greenhouses");
-  }
-
   const handleOpenAdd = () => {
-    if (!selectedGreenhouseId) {
-      toast.warning("Please select a greenhouse first!");
-      return;
-    }
     setSelectedData(null);
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (row: DeviceType) => {
-    if (!selectedGreenhouseId) {
-      toast.warning("Please select a greenhouse first!");
-      return;
-    }
     setSelectedData({
       id: row.id,
       name: row.name,
       type: row.type,
       macAddress: row.macAddress,
       status: "OFFLINE",
-      areaId: row.areaId,
     });
     setIsModalOpen(true);
   };
@@ -118,7 +79,7 @@ export default function DevicePage() {
     if (selectedData) {
       console.log(selectedData);
       updateMutation.mutate(
-        {id: selectedData.id, idGreenhouse: selectedGreenhouseId, ...data},
+        {id: selectedData.id, ...data},
         {
           onSuccess: (res: any) => {
             toast.success(res.message || "Device updated successfully");
@@ -130,7 +91,6 @@ export default function DevicePage() {
     } else {
       createMutation.mutate(
         {
-          idGreenhouse: selectedGreenhouseId,
           ...data,
         },
         {
@@ -147,7 +107,7 @@ export default function DevicePage() {
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this device?")) {
       deleteMutation.mutate(
-        {id: id, idGreenhouse: selectedGreenhouseId},
+        {id: id},
         {
           onSuccess: (res: any) => {
             toast.success(res.message || "Device deleted successfully");
@@ -160,13 +120,6 @@ export default function DevicePage() {
     }
   };
 
-  const areasConfig = areas.data?.map((area: any) => ({
-    label: area.name,
-    value: area.id,
-  }));
-
-  console.log(areasConfig);
-
   const DevicesField: FormFieldConfig[] = [
     {
       name: "name",
@@ -178,17 +131,33 @@ export default function DevicePage() {
       label: "Mac Address",
       placeholder: "e.g., FF:EE:DD:CC:BB:AA",
     },
-    {
-      name: "areaId",
-      label: "Area ID",
-      type: "select",
-      placeholder: "Pilih Area penempatan alat...",
-      options: areasConfig,
-    },
   ];
 
   const columns: TableColumn<DeviceType>[] = [
     {header: "Name", accessor: "name"},
+    {
+      header: "MAC Address",
+      cell: (row) => (
+        <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono border border-gray-200 text-gray-700">
+          {row.macAddress}
+        </code>
+      ),
+    },
+    {
+      header: "Relation",
+      cell: (row) => {
+        const hasGreenhouse = row.greenhouse && row.greenhouse.owner;
+        return (
+          <>
+            {!hasGreenhouse ? (
+              <Badge color="red">No Relation</Badge>
+            ) : (
+              <Badge color="green">{row.greenhouse?.owner?.name}</Badge>
+            )}
+          </>
+        );
+      },
+    },
     {
       header: "Created At",
       cell: (row) => {
@@ -198,11 +167,9 @@ export default function DevicePage() {
           month: "2-digit",
           year: "numeric",
         });
-
         return (
-          <div className="flex flex-row gap-2">
+          <div className="text-gray-600 text-sm">
             <p>{tanggal}</p>
-            {/* <p>{jam}</p> */}
           </div>
         );
       },
@@ -210,23 +177,15 @@ export default function DevicePage() {
     {
       header: "Updated At",
       cell: (row) => {
-        // console.log(user);
         const date = new Date(row.updatedAt);
         const tanggal = date.toLocaleDateString("id-ID", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
         });
-
-        // const jam = date.toLocaleTimeString("id-ID", {
-        //   hour: "2-digit",
-        //   minute: "2-digit",
-        //   second: "2-digit",
-        // });
         return (
-          <div className="flex flex-row gap-2">
+          <div className="text-gray-600 text-sm">
             <p>{tanggal}</p>
-            {/* <p>{jam}</p> */}
           </div>
         );
       },
@@ -238,7 +197,7 @@ export default function DevicePage() {
         <div className="flex items-center justify-end gap-2">
           <Button
             onClick={() =>
-              router.push(`/dashboard/device/${selectedGreenhouseId}/${row.id}`)
+              router.push(`/dashboard/super-admin/device/${row.id}`)
             }
             variant="ghost"
             className="p-2 text-blue-600 hover:bg-blue-50"
@@ -249,7 +208,8 @@ export default function DevicePage() {
           <Button
             onClick={() => handleOpenEdit(row)}
             variant="ghost"
-            className="p-2 text-blue-600 hover:bg-blue-50"
+            className="p-2 text-amber-600 hover:bg-amber-50" // Ganti warna dikit biar beda sama icon Eye
+            title="Edit Device"
           >
             <Edit className="w-4 h-4" />
           </Button>
@@ -257,6 +217,7 @@ export default function DevicePage() {
             onClick={() => handleDelete(row.id)}
             variant="ghost"
             className="p-2 text-red-600 hover:bg-red-50"
+            title="Delete Device"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -276,22 +237,6 @@ export default function DevicePage() {
             Device Management
           </h1>
           <p className="text-gray-500">Manage your greenhouse devices</p>
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <select
-            value={selectedGreenhouseId}
-            onChange={(e) => setSelectedGreenhouseId(e.target.value)}
-            disabled={isLoadingGreenhouse}
-            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-green-500 shadow-sm"
-          >
-            {/* <option value="">Greenhouse</option> */}
-            {greenhouses.data?.map((gh: GreenhousesType) => (
-              <option key={gh.id} value={gh.id}>
-                {gh.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Tombol ADD ditekuk untuk membuka Modal, bukan pindah halaman */}

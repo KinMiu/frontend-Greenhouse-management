@@ -3,14 +3,10 @@
 import {
   Camera,
   Cpu,
-  Droplet,
   Home,
   LayoutDashboard,
   LogOut,
   Map,
-  Sprout,
-  ThermometerSun,
-  User,
   UserCog,
   Users,
 } from "lucide-react";
@@ -18,12 +14,7 @@ import Link from "next/link";
 import {usePathname, useRouter} from "next/navigation";
 import Button from "../ui/button";
 import {IMAGES} from "@/src/assets";
-
-// type NavItem = {
-//   name: string;
-//   href: string;
-//   icon: React.ElementType;
-// };
+import {useQueryClient} from "@tanstack/react-query"; // 🚀 IMPORT INI
 
 const ROLE_MENUS = {
   OWNER: [
@@ -37,7 +28,9 @@ const ROLE_MENUS = {
   ],
   SUPER_ADMIN: [
     {name: "Dashboard", href: "/dashboard", icon: LayoutDashboard},
-    {name: "User", href: "/dashboard/users", icon: Users},
+    {name: "User", href: "/dashboard/super-admin/users", icon: Users},
+    // 🚀 SEPARATED WAY: Arahkan ke endpoint/jalur folder halaman admin yang baru biar gak bentrok
+    {name: "Device Master", href: "/dashboard/super-admin/device", icon: Cpu},
   ],
 };
 
@@ -52,13 +45,19 @@ interface SidebarProps {
 export default function Sidebar({isOpen, onClose, role}: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient(); // 🚀 DEKLARASIKAN QUERY CLIENT
 
   const currentRole = role?.toUpperCase() as RoleType;
   const currentNavItems = ROLE_MENUS[currentRole] || ROLE_MENUS.OWNER;
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("userData");
+
+    // 🚀 APUS SEMUA DOSA CACHE: Hancurkan cache React Query agar login selanjutnya dapet role terbaru
+    queryClient.clear();
+
     return router.push("/signin");
   };
 
@@ -76,13 +75,11 @@ export default function Sidebar({isOpen, onClose, role}: SidebarProps) {
       >
         <div className="h-20 flex items-center px-6 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
-            {/* Logo Gambar Urken */}
             <img
               src={IMAGES.logo}
               alt="UrKen Logo"
               className="w-9 h-9 object-contain rounded-lg"
             />
-            {/* Teks Nama Baru */}
             <span className="text-lg font-extrabold tracking-wide text-gray-850 leading-tight">
               The Origin{" "}
               <span className="text-green-600 block text-xs font-semibold tracking-normal">

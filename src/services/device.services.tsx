@@ -1,7 +1,13 @@
 import {apiFetch} from "../lib/api";
 import {DeviceFromType, DeviceType} from "../types";
 
-export const GetGreenhouseDevice = async (id: string) => {
+export const GetDevice = async () => {
+  return apiFetch<DeviceType[]>(`/device`, {
+    method: "GET",
+  });
+};
+
+export const GetGreenhouseDeviceByGreenhouse = async (id: string) => {
   return apiFetch<DeviceType[]>(`/device/${id}/my`, {
     method: "GET",
   });
@@ -14,11 +20,8 @@ export const GetGreenhouseDeviceDetails = async (deviceId: string) => {
   });
 };
 
-export const CreateDevice = async (
-  idGreenhouse: string,
-  data: DeviceFromType,
-) => {
-  return apiFetch(`/device/${idGreenhouse}`, {
+export const CreateDevice = async (data: DeviceFromType) => {
+  return apiFetch(`/device`, {
     method: "POST",
     body: JSON.stringify(data),
   });

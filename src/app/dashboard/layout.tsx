@@ -17,14 +17,15 @@ export default function DashboardLayout({
 
   // 1. Ambil data user & role dari Hook andalan Anda
   const {data: users = [], isLoading, isError} = useGetMe();
-  const role = users.data?.role;
+  const role = !isLoading && !isError && users?.data ? users.data.role : null;
+
+  console.log("Data Users:", users);
+  console.log("Current User Role:", role);
 
   // 2. Efek Satpam Pengaman Jalur (Authorization)
   useEffect(() => {
-    // Kalau masih loading ambil data dari backend, skip dulu biar gak salah mentalin
     if (isLoading) return;
 
-    // Jika terjadi error auth atau role tidak ditemukan (misal token hangus/unauthorized)
     if (isError || !role) {
       router.replace("/signin");
       return;
@@ -42,19 +43,27 @@ export default function DashboardLayout({
       return;
     }
 
-    // B. Proteksi Halaman Manajemen Area & Greenhouse (Khusus OWNER & SUPER_ADMIN)
+    // 🚀 B. Proteksi Halaman Device Master Baru Milik Admin (Sesuaikan dengan nama folder baru lo)
+    if (
+      pathname.startsWith("/dashboard/device-master") &&
+      role !== "SUPER_ADMIN"
+    ) {
+      router.replace("/dashboard");
+      return;
+    }
+
+    // C. Proteksi Halaman Manajemen Area & Greenhouse (Khusus OWNER & SUPER_ADMIN)
     if (
       (pathname.startsWith("/dashboard/area") ||
         pathname.startsWith("/dashboard/greenhouse")) &&
       role !== "OWNER" &&
       role !== "SUPER_ADMIN"
     ) {
-      router.replace("/dashboard"); // Mentalin Staff biasa ke beranda dashboard
+      router.replace("/dashboard");
       return;
     }
   }, [role, isLoading, isError, pathname, router]);
 
-  // 3. Tampilan Loading State (Biar pas ganti halaman gak kedip transparan)
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-100">
@@ -68,12 +77,10 @@ export default function DashboardLayout({
     );
   }
 
-  // Jika terjadi error atau user tidak punya role yang valid, block render children
   if (isError || !role) {
     return null;
   }
 
-  // 4. Jika Lolos Validasi, Tampilkan Dashboard Utuh
   return (
     <div className="h-screen w-full bg-gray-100 flex overflow-hidden">
       <Sidebar
@@ -84,7 +91,10 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Navbar onMenuClick={() => setIsSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto h-full">{children}</div>
+          {/* 🚀 FIX TABEL KETUKAR: Pakai key={pathname} agar React ngebakar & ngereset state setiap kali lo ganti halaman */}
+          <div key={pathname} className="max-w-7xl mx-auto h-full">
+            {children}
+          </div>
         </main>
       </div>
     </div>
