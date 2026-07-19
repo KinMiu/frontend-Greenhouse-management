@@ -9,14 +9,15 @@ import {
   Activity,
   Trash2,
   Edit,
-  Plus,
   Clock,
   ArrowLeft,
   Fan,
   History,
   ChevronLeft,
   ChevronRight,
-  ArrowRight,
+  Video,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import Button from "@/src/components/ui/button";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
@@ -24,7 +25,7 @@ import z from "zod";
 import GenericFormModal from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
 import {toast} from "sonner";
-import {useState, useMemo, useEffect} from "react";
+import {useState, useMemo, useEffect, useRef} from "react";
 import {motion, AnimatePresence} from "framer-motion";
 import {useGetGreenhouseDeviceComponentSensor} from "@/src/hooks/use-deviceComponentSensor";
 import {
@@ -58,26 +59,34 @@ export default function DeviceDetailPage() {
   const params = useParams();
   const router = useRouter();
 
-  // -- States --
+  // -- States Umum --
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyLogs, setHistoryLogs] = useState<any>(null);
   const [selectedData, setSelectedData] = useState<any>(null);
   const [isCompDetailOpen, setIsCompDetailOpen] = useState(false);
   const [selectedComp, setSelectedComp] = useState<any>(null);
-  const [chartData, setChartData] = useState<{time: string; value: number}[]>(
-    [],
-  );
 
   // -- Pagination States --
-  const [mainTablePage, setMainTablePage] = useState(1); // Untuk Tabel Komponen Utama
-  const [sensorPage, setSensorPage] = useState(1); // Untuk Tabel Sensor di Modal
+  const [mainTablePage, setMainTablePage] = useState(1);
+  const [sensorPage, setSensorPage] = useState(1);
   const itemsPerPage = 5;
 
   const deviceId = params.deviceId as string;
   const greenhouseId = params.greenhouseId as string;
 
-  // --- DATA FETCHING ---
+  // -- Camera Stream States (WebSocket) --
+  const [isWsConnected, setIsWsConnected] = useState(false);
+  const [cameraFrame, setCameraFrame] = useState<string | null>(null);
+  const [wsFrameCount, setWsFrameCount] = useState(0);
+  const prevWsUrlRef = useRef<string | null>(null);
+
+  // -- States Grafik MQTT --
+  const [chartData, setChartData] = useState<{time: string; value: number}[]>(
+    [],
+  );
+
+  // --- DATA FETCHING (Profil Device Utama) ---
   const {
     data: response,
     isLoading,
@@ -85,17 +94,25 @@ export default function DeviceDetailPage() {
   } = useGetGreenhouseDeviceDetails(deviceId);
   const device = response?.data;
 
-  // --- FETCH SENSOR DATA ---
+  // --- LOGIKA PINTAR PENENTU TAMPILAN KAMERA ---
+  // Memeriksa properti device.type ATAU mendeteksi apakah salah satu komponen bertipe "CAMERA"
+  const isCameraDevice = useMemo(() => {
+    if (!device) return false;
+    const hasCameraComponent = device.components?.some(
+      (comp: any) => comp.type === "CAMERA",
+    );
+    return device.type === "CAMERA" || hasCameraComponent;
+  }, [device]);
+
+  // --- DATA FETCHING (Sensor Log dari DB untuk Modal) ---
   const {data: sensorResponse, isLoading: isLoadingSensor} =
     useGetGreenhouseDeviceComponentSensor(
       greenhouseId,
       selectedComp?.id,
       sensorPage,
     );
-
-  const sensorData = sensorResponse?.data || [];
+  const sensorDataArray = sensorResponse?.data || [];
   const sensorPagination = sensorResponse?.data.pagination;
-  console.log(sensorResponse);
 
   // --- CLIENT-SIDE PAGINATION LOGIC (Main Table) ---
   const {paginatedComponents, totalMainPages} = useMemo(() => {
@@ -124,11 +141,6 @@ export default function DeviceDetailPage() {
   const handleOpenedHistory = (data: any, y: boolean) => {
     setIsHistoryOpen(y);
     setHistoryLogs(data);
-  };
-
-  const handleOpenAdd = () => {
-    setSelectedData(null);
-    setIsModalOpen(true);
   };
 
   const handleOpenEdit = (row: any) => {
@@ -176,13 +188,64 @@ export default function DeviceDetailPage() {
     }
   };
 
+  // --- EFFECT 1: WebSocket Camera Stream ---
   useEffect(() => {
-    if (!isCompDetailOpen || !device?.macAddress || !selectedComp) return;
+    if (!device || !isCameraDevice || !device.macAddress) return;
 
-    // 1. Pastikan URL & Port benar (Gunakan ws/wss untuk Browser)
-    // Pakai port 8083 untuk ws atau 8084 untuk wss
+    const cleanMac = device.macAddress.replace(/:/g, "");
+    const wsUrl = `wss://urken.psti-ubl.id/ws/viewer?mac=${cleanMac}`;
+
+    console.log(`📡 Initiating Camera WS stream for: ${cleanMac}`);
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = "blob";
+
+    ws.onopen = () => {
+      console.log(`✅ Camera WS Connected [${cleanMac}]`);
+      setIsWsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data instanceof Blob) {
+        if (prevWsUrlRef.current) {
+          URL.revokeObjectURL(prevWsUrlRef.current);
+        }
+        const newFrameUrl = URL.createObjectURL(event.data);
+        setCameraFrame(newFrameUrl);
+        prevWsUrlRef.current = newFrameUrl;
+        setWsFrameCount((prev) => prev + 1);
+      }
+    };
+
+    ws.onclose = (event) => {
+      console.warn("❌ Camera WS Disconnected!", event.code);
+      setIsWsConnected(false);
+      setCameraFrame(null);
+    };
+
+    ws.onerror = (error) => {
+      console.error("⚠️ Camera WS Error:", error);
+    };
+
+    return () => {
+      console.log("🔌 Cleaning up Camera WS connection...");
+      ws.close();
+      if (prevWsUrlRef.current) {
+        URL.revokeObjectURL(prevWsUrlRef.current);
+      }
+    };
+  }, [device?.macAddress, isCameraDevice]);
+
+  // --- EFFECT 2: MQTT Real-time Chart ---
+  useEffect(() => {
+    if (
+      !isCompDetailOpen ||
+      !device?.macAddress ||
+      !selectedComp ||
+      selectedComp.type !== "SENSOR"
+    )
+      return;
+
     const brokerUrl = "wss://urken.psti-ubl.id/ws-rabbitmq";
-
     const client = mqtt.connect(brokerUrl, {
       username: "/smk2pkl:smk2iot",
       password: "smk2iot",
@@ -192,41 +255,30 @@ export default function DeviceDetailPage() {
     client.on("connect", () => {
       const topic = `sensor/${device.macAddress}`;
       client.subscribe(topic);
-      console.log(`✅ Connected! Listening to: ${topic}`);
+      console.log(`✅ MQTT Connected! Listening topic: ${topic}`);
     });
 
     client.on("message", (topic, message) => {
       try {
         const payload = JSON.parse(message.toString());
-        console.log("📩 Raw MQTT Payload:", payload);
-
-        // 2. AMBIL DATA BERDASARKAN PIN/ID (Bukan .value)
-        // selectedComp.pin harus berisi ID seperti UUID yang dikirim load tester
         const targetKey = selectedComp.id;
         const incomingValue = payload[targetKey];
 
-        // Cek apakah data untuk komponen ini ada di dalam payload
         if (incomingValue !== undefined) {
           setChartData((prev) => {
             const newData = [
               ...prev,
               {
                 time: new Date().toLocaleTimeString("id-ID", {hour12: false}),
-                value: Number(incomingValue), // Pastikan jadi angka
+                value: Number(incomingValue),
               },
             ];
             return newData.slice(-15);
           });
-        } else {
-          console.warn(`⚠️ Key "${targetKey}" tidak ditemukan di payload`);
         }
       } catch (err) {
         console.error("❌ Failed to parse MQTT message", err);
       }
-    });
-
-    client.on("error", (err) => {
-      console.error("❌ MQTT Connection Error:", err);
     });
 
     return () => {
@@ -236,7 +288,7 @@ export default function DeviceDetailPage() {
     };
   }, [isCompDetailOpen, device?.macAddress, selectedComp]);
 
-  // --- COLUMNS CONFIG ---
+  // --- COLUMNS CONFIG (Main Table Components) ---
   const columns: TableColumn<any>[] = [
     {
       header: "Component",
@@ -286,14 +338,16 @@ export default function DeviceDetailPage() {
       className: "text-right",
       cell: (row) => (
         <div className="flex items-center justify-end gap-2">
-          <Button
-            onClick={() => handleOpenCompDetail(row)}
-            variant="ghost"
-            className="p-2 text-emerald-600 hover:bg-emerald-50"
-            title="History"
-          >
-            <Activity className="w-4 h-4" />
-          </Button>
+          {row.type === "SENSOR" && (
+            <Button
+              onClick={() => handleOpenCompDetail(row)}
+              variant="ghost"
+              className="p-2 text-emerald-600 hover:bg-emerald-50"
+              title="Real-time Monitor"
+            >
+              <Activity className="w-4 h-4" />
+            </Button>
+          )}
           <Button
             onClick={() => handleOpenEdit(row)}
             variant="ghost"
@@ -313,6 +367,7 @@ export default function DeviceDetailPage() {
     },
   ];
 
+  // --- COLUMNS CONFIG (History Logs Modal) ---
   const historyColumns: TableColumn<any>[] = [
     {
       header: "Status",
@@ -346,7 +401,7 @@ export default function DeviceDetailPage() {
                 })
                 .replace(/\./g, ":")}
             </span>
-            <span className="text-[9px] text-gray-400 uppercase font-black">
+            <span className="text-[9px] text-gray-400 uppercase">
               {date.toLocaleDateString("id-ID", {
                 day: "2-digit",
                 month: "short",
@@ -375,37 +430,60 @@ export default function DeviceDetailPage() {
     );
   if (isError || !device)
     return (
-      <div className="p-10 text-center text-red-500">
-        Error: Device not found.
+      <div className="p-10 text-center text-red-500 border border-red-200 rounded-xl bg-red-50">
+        Error: Device profile not found.
       </div>
     );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* 1. HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
-            className="p-2 border border-gray-200 bg-white"
+            className="p-2 border border-gray-200 bg-white shadow-sm hover:bg-gray-50 rounded-xl"
             onClick={() => router.push(`/dashboard/device`)}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">{device.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              {device.name}
+            </h1>
             <p className="text-gray-500 text-sm">
-              Hardware Configuration & Monitoring
+              {isCameraDevice
+                ? "Live Video Stream Dashboard"
+                : "Hardware Configuration Node"}
             </p>
           </div>
         </div>
+
         <div className="flex flex-row justify-center items-center gap-3">
-          <Button variant="primary" onClick={handleOpenAdd}>
-            + Add Component
-          </Button>
+          <div
+            className={`px-3 py-1.5 rounded-full font-bold text-[11px] flex items-center gap-2 border shadow-inner transition-all ${
+              isCameraDevice
+                ? isWsConnected
+                  ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                  : "bg-rose-50 text-rose-600 border-rose-200"
+                : "bg-emerald-50 text-emerald-600 border-emerald-200"
+            }`}
+          >
+            <div
+              className={`w-2 h-2 rounded-full ${isCameraDevice && !isWsConnected ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`}
+            />
+            {isCameraDevice
+              ? isWsConnected
+                ? "WS LIVE"
+                : "WS OFFLINE"
+              : "NODE ONLINE"}
+          </div>
+
           <Button
             onClick={() => handleOpenedHistory(device.statusLogs, true)}
             variant="danger"
+            className="p-2.5 rounded-xl shadow-sm"
+            title="View Connection Logs"
           >
             <History className="w-5 h-5" />
           </Button>
@@ -418,110 +496,199 @@ export default function DeviceDetailPage() {
           label="Hardware MAC"
           val={device.macAddress}
           icon={Wifi}
-          color="text-blue-500"
+          color="text-blue-500 bg-blue-50"
         />
         <InfoCard
           label="Location"
           val={device.area?.name || "Global Node"}
           icon={MapPin}
-          color="text-orange-500"
+          color="text-orange-500 bg-orange-50"
         />
-        <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
+
+        <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm hover:border-gray-200 transition-colors">
           <div className="flex items-center gap-4">
-            <div className="p-2 rounded-lg bg-gray-50 text-purple-500">
+            <div className="p-2.5 rounded-lg bg-purple-50 text-purple-500">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-black text-gray-400">
+              <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
                 Last Seen
               </p>
-              <p className="text-xs font-bold font-mono">
+              <p className="text-xs font-bold font-mono text-gray-700">
                 {device.lastSeen
-                  ? new Date(device.lastSeen).toLocaleTimeString("id-ID")
+                  ? new Date(device.lastSeen).toLocaleTimeString("id-ID", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })
                   : "NEVER"}
               </p>
             </div>
           </div>
-          {/* <Button
-            onClick={() => handleOpenedHistory(device.statusLogs, true)}
-            variant="ghost"
-            className="p-2 text-purple-600 hover:bg-purple-50"
-          >
-            <History className="w-4 h-4" />
-          </Button> */}
         </div>
       </div>
 
-      {/* 3. COMPONENTS TABLE WITH PAGINATION */}
-      <motion.div
-        initial={{opacity: 0, y: 20}}
-        animate={{opacity: 1, y: 0}}
-        className="space-y-4"
-      >
-        <Table
-          columns={columns}
-          data={paginatedComponents}
-          emptyMessage="No components found."
-        />
+      {/* 3. ADAPTIVE CONTENT AREA */}
+      {isCameraDevice ? (
+        // ================= TAMPILAN JIKA KAMERA (Hanya Stream) =================
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <motion.div
+            initial={{opacity: 0, y: 15}}
+            animate={{opacity: 1, y: 0}}
+            className="lg:col-span-2 bg-white border border-gray-200 rounded-3xl shadow-sm overflow-hidden flex flex-col"
+          >
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-zinc-50/50">
+              <h3 className="font-bold text-sm text-gray-700 flex items-center gap-2">
+                <Video className="w-4 h-4 text-blue-500" />
+                Live CCTV Stream
+              </h3>
+              {isWsConnected && cameraFrame && (
+                <span className="text-[9px] bg-rose-500 text-white font-black uppercase tracking-widest px-2 py-0.5 rounded-sm animate-pulse">
+                  LIVE
+                </span>
+              )}
+            </div>
 
-        {totalMainPages > 1 && (
-          <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              Showing {paginatedComponents.length} of{" "}
-              {device?.components.length} components
-            </p>
+            <div className="relative w-full aspect-video max-h-[480px] bg-zinc-950 flex items-center justify-center overflow-hidden border-t border-gray-900">
+              {cameraFrame ? (
+                <img
+                  src={cameraFrame}
+                  alt="Live Camera Stream"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-zinc-500 gap-3 p-8 border border-dashed border-zinc-700 rounded-2xl bg-zinc-900">
+                  {isWsConnected ? (
+                    <>
+                      <Activity className="w-10 h-10 animate-spin text-green-500" />
+                      <p className="text-xs font-medium tracking-wide text-zinc-400 text-center">
+                        Connecting successfully.
+                        <br />
+                        Decoding incoming binary frames...
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-10 h-10 text-rose-600" />
+                      <p className="text-xs font-medium text-zinc-500 text-center">
+                        Stream offline or blocked.
+                        <br />
+                        Awaiting camera handshake / HTTPS check.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
 
-            <div className="flex items-center gap-2">
-              {/* Tombol Previous */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 border border-gray-200 bg-white"
-                disabled={mainTablePage === 1}
-                onClick={() => setMainTablePage((p) => p - 1)}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-
-              {/* Nomor Halaman Digital */}
-              <div className="flex gap-1">
-                {Array.from({length: totalMainPages}, (_, i) => i + 1).map(
-                  (pageNum) => (
-                    <button
-                      key={pageNum}
-                      onClick={() => setMainTablePage(pageNum)}
-                      className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${
-                        mainTablePage === pageNum
-                          ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
-                          : "bg-gray-50 text-gray-500 hover:bg-gray-100 border border-transparent"
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  ),
-                )}
+          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">
+              Stream Metrics
+            </h4>
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-center gap-4">
+              <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
+                <Video className="w-5 h-5" />
               </div>
-
-              {/* Tombol Next */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 border border-gray-200 bg-white"
-                disabled={mainTablePage >= totalMainPages}
-                onClick={() => setMainTablePage((p) => p + 1)}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+              <div>
+                <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                  Protocol
+                </p>
+                <p className="text-sm font-bold text-gray-700 font-mono mt-0.5">
+                  WebSocket (Binary Blob)
+                </p>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4">
+              <div className="p-2.5 rounded-lg bg-purple-50 text-purple-500">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+                  Data Throughput
+                </p>
+                <p className="text-sm font-bold text-gray-700 font-mono mt-0.5">
+                  {wsFrameCount.toLocaleString()}{" "}
+                  <span className="text-xs font-normal text-gray-400">
+                    frames received
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
-        )}
-      </motion.div>
+        </div>
+      ) : (
+        // ================= TAMPILAN JIKA SENSOR/ACTUATOR (Hanya Tabel Component) =================
+        <motion.div
+          initial={{opacity: 0, y: 20}}
+          animate={{opacity: 1, y: 0}}
+          transition={{duration: 0.4}}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-emerald-500" /> Attached Hardware
+              Components
+            </h3>
+          </div>
 
-      {/* 4. MODAL ADD/EDIT COMPONENT */}
+          <div className="bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <Table
+              columns={columns}
+              data={paginatedComponents}
+              emptyMessage="No components attached to this node."
+            />
+          </div>
+
+          {totalMainPages > 1 && (
+            <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-2">
+                Showing {paginatedComponents.length} of{" "}
+                {device?.components.length} components
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
+                  disabled={mainTablePage === 1}
+                  onClick={() => setMainTablePage((p) => p - 1)}
+                >
+                  <ChevronLeft className="w-4 h-4 text-gray-600" />
+                </Button>
+                <div className="flex gap-1">
+                  {Array.from({length: totalMainPages}, (_, i) => i + 1).map(
+                    (pageNum) => (
+                      <button
+                        key={pageNum}
+                        onClick={() => setMainTablePage(pageNum)}
+                        className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${mainTablePage === pageNum ? "bg-emerald-500 text-white shadow-md" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                      >
+                        {pageNum}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
+                  disabled={mainTablePage >= totalMainPages}
+                  onClick={() => setMainTablePage((p) => p + 1)}
+                >
+                  <ChevronRight className="w-4 h-4 text-gray-600" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* --- 4. MODAL EDIT CONFIGURATION --- */}
       <GenericFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedData ? "Edit Component" : "Add New Component"}
+        title="Edit Component Configuration"
         schema={DeviceComponentsSchema}
         fields={[
           {name: "name", label: "Name"},
@@ -536,7 +703,7 @@ export default function DeviceDetailPage() {
           },
           {name: "category", label: "Category"},
           {name: "unit", label: "Unit"},
-          {name: "pin", label: "Pin/Key"},
+          {name: "pin", label: "Pin/Key (MQTT Payload Key)"},
         ]}
         defaultValues={
           selectedData || {
@@ -551,45 +718,46 @@ export default function DeviceDetailPage() {
         isLoading={isPending}
       />
 
-      {/* 5. MODAL STATUS HISTORY */}
+      {/* --- 5. MODAL CONNECTION LOGS --- */}
       <AnimatePresence>
         {isHistoryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <motion.div
               initial={{opacity: 0, scale: 0.95}}
               animate={{opacity: 1, scale: 1}}
               exit={{opacity: 0, scale: 0.95}}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]"
             >
-              <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50/50">
+              <div className="px-6 py-4 border-b flex items-center justify-between bg-white sticky top-0 z-10">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+                  <div className="p-2.5 bg-purple-50 rounded-xl text-purple-600 border border-purple-100">
                     <History className="w-5 h-5" />
                   </div>
-                  <h3 className="font-bold text-gray-800">Connection Logs</h3>
+                  <h3 className="font-bold text-gray-800">
+                    Node Connection Logs
+                  </h3>
                 </div>
                 <button
                   onClick={() => handleOpenedHistory([], false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
                 >
-                  <Plus className="w-6 h-6 rotate-45" />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
-              <div className="p-6">
-                <div className="max-h-[400px] overflow-y-auto rounded-xl border border-gray-100">
-                  <Table
-                    columns={historyColumns}
-                    data={historyLogs || []}
-                    emptyMessage="No connection logs recorded."
-                  />
-                </div>
+              <div className="p-6 overflow-y-auto flex-grow custom-scrollbar">
+                <Table
+                  columns={historyColumns}
+                  data={historyLogs || []}
+                  emptyMessage="No connection logs recorded for this node."
+                />
               </div>
-              <div className="px-6 py-4 bg-gray-50 text-right">
+              <div className="px-6 py-4 bg-gray-50/50 border-t flex justify-end">
                 <Button
                   variant="primary"
                   onClick={() => handleOpenedHistory([], false)}
+                  className="px-5 rounded-lg"
                 >
-                  Close
+                  Close Logs
                 </Button>
               </div>
             </motion.div>
@@ -597,7 +765,7 @@ export default function DeviceDetailPage() {
         )}
       </AnimatePresence>
 
-      {/* 6. MODAL COMPONENT DATA HISTORY (Sensor Readings) */}
+      {/* --- 6. MODAL SENSOR REAL-TIME MONITOR (MQTT) --- */}
       <AnimatePresence>
         {isCompDetailOpen && selectedComp && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md">
@@ -605,12 +773,11 @@ export default function DeviceDetailPage() {
               initial={{opacity: 0, scale: 0.95, y: 20}}
               animate={{opacity: 1, scale: 1, y: 0}}
               exit={{opacity: 0, scale: 0.95, y: 20}}
-              className="bg-white sm:rounded-3xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col h-full sm:h-auto max-h-[95vh]"
+              className="bg-white sm:rounded-3xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col h-full sm:h-auto max-h-[95vh] border border-gray-100"
             >
-              {/* Header */}
-              <div className="px-8 py-5 border-b flex items-center justify-between bg-white">
+              <div className="px-8 py-5 border-b flex items-center justify-between bg-white sticky top-0 z-10">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 ring-1 ring-emerald-100">
+                  <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 ring-1 ring-emerald-100 shadow-inner">
                     <Activity className="w-6 h-6" />
                   </div>
                   <div>
@@ -618,119 +785,134 @@ export default function DeviceDetailPage() {
                       {selectedComp.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md font-black uppercase tracking-wider">
-                        {selectedComp.category}
+                      <span className="text-[10px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-md font-black uppercase tracking-wider">
+                        {selectedComp.category || "Uncategorized"}
                       </span>
                       <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
-                        • {selectedComp.unit}
+                        • Unit: {selectedComp.unit || "N/A"}
                       </span>
                     </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsCompDetailOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors group"
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
                 >
-                  <Plus className="w-7 h-7 text-gray-400 rotate-45 group-hover:rotate-90 transition-transform duration-300" />
+                  <X className="w-7 h-7" />
                 </button>
               </div>
 
-              {/* Content Body */}
-              <div className="p-8 overflow-y-auto custom-scrollbar">
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                  {/* Left Column: Chart Area (Main) */}
+              <div className="p-6 sm:p-8 overflow-y-auto flex-grow bg-gray-50/30">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
                   <div className="lg:col-span-3 space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between px-1">
                       <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                         <Activity className="w-4 h-4 text-emerald-500" />{" "}
-                        Performance Analysis
+                        Real-time Performance Analysis
                       </h4>
-                      <div className="flex gap-2">
-                        <span className="flex items-center gap-1 text-[11px] font-medium text-gray-400">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
-                          Real-time
-                        </span>
-                      </div>
+                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 animate-pulse">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
+                        Live MQTT Stream
+                      </span>
                     </div>
 
-                    <div className="bg-white border border-gray-100 rounded-3xl h-[300px] lg:h-[400px] p-4">
+                    <div className="bg-white border border-gray-100 rounded-3xl h-[300px] lg:h-[420px] p-5 shadow-sm">
                       {chartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData}>
+                          <LineChart
+                            data={chartData}
+                            margin={{top: 10, right: 10, left: -20, bottom: 0}}
+                          >
                             <CartesianGrid
                               strokeDasharray="3 3"
                               vertical={false}
-                              stroke="#f0f0f0"
+                              stroke="#f5f5f5"
                             />
                             <XAxis
                               dataKey="time"
                               fontSize={10}
                               tickLine={false}
                               axisLine={false}
+                              stroke="#a0a0a0"
+                              dy={10}
                             />
                             <YAxis
                               fontSize={10}
                               tickLine={false}
                               axisLine={false}
+                              stroke="#a0a0a0"
+                              dx={-5}
                               unit={selectedComp.unit}
                             />
                             <Tooltip
                               contentStyle={{
                                 borderRadius: "12px",
                                 border: "none",
-                                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
                               }}
                             />
                             <Line
                               type="monotone"
                               dataKey="value"
-                              stroke="#10b981" // emerald-500
+                              stroke="#10b981"
                               strokeWidth={3}
-                              dot={{r: 4, fill: "#10b981"}}
-                              activeDot={{r: 6}}
+                              dot={{
+                                r: 4,
+                                fill: "#10b981",
+                                strokeWidth: 2,
+                                stroke: "#fff",
+                              }}
+                              activeDot={{r: 6, stroke: "#fff", strokeWidth: 2}}
                               animationDuration={300}
+                              isAnimationActive={true}
                             />
                           </LineChart>
                         </ResponsiveContainer>
                       ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                          <Activity className="w-8 h-8 mb-2 animate-pulse" />
-                          <p className="text-sm">Waiting for MQTT data...</p>
-                          <code className="text-[10px] mt-1">
-                            Topic: greenhouse/data/{device.macAddress}/
-                            {selectedComp.pin}
+                        <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                          <Activity className="w-10 h-10 animate-pulse text-emerald-300" />
+                          <p className="text-sm font-medium">
+                            Awaiting incoming MQTT data...
+                          </p>
+                          <code className="text-[10px] mt-1 bg-white px-3 py-1 rounded-md border border-gray-100 shadow-xs font-mono">
+                            Topic: sensor/{device.macAddress} (Key:{" "}
+                            {selectedComp.id})
                           </code>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Right Column: Table Readings */}
-                  <div className="lg:col-span-2 flex flex-col h-full">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="lg:col-span-2 flex flex-col h-full space-y-4">
+                    <div className="flex items-center justify-between px-1">
                       <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                         <Clock className="w-4 h-4 text-emerald-500" /> Recent
-                        Logs
+                        Logged Readings
                       </h4>
                     </div>
 
-                    <div className="flex-grow rounded-2xl border border-gray-100 overflow-hidden shadow-sm bg-white">
+                    <div className="flex-grow rounded-3xl border border-gray-100 overflow-hidden shadow-sm bg-white min-h-[300px]">
                       <Table
                         isLoading={isLoadingSensor}
                         columns={[
                           {
                             header: "Timestamp",
                             cell: (r) => (
-                              <div className="flex flex-col">
-                                <span className="font-bold text-gray-700 text-[11px]">
-                                  {new Date(r.createdAt).toLocaleTimeString(
-                                    "id-ID",
-                                    {hour: "2-digit", minute: "2-digit"},
-                                  )}
+                              <div className="flex flex-col font-mono text-[11px]">
+                                <span className="font-bold text-gray-700">
+                                  {new Date(r.createdAt)
+                                    .toLocaleTimeString("id-ID", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                      hour12: false,
+                                    })
+                                    .replace(/\./g, ":")}
                                 </span>
-                                <span className="text-[9px] text-gray-400 uppercase">
+                                <span className="text-[9px] text-gray-400 uppercase font-sans">
                                   {new Date(r.createdAt).toLocaleDateString(
                                     "id-ID",
+                                    {day: "2-digit", month: "short"},
                                   )}
                                 </span>
                               </div>
@@ -739,9 +921,15 @@ export default function DeviceDetailPage() {
                           {
                             header: "Value",
                             cell: (r) => (
-                              <span className="font-black text-emerald-600 text-sm">
-                                {r.value}{" "}
-                                <span className="text-[10px] font-medium text-gray-400">
+                              <span className="font-black text-emerald-600 text-sm tracking-tight">
+                                {Number(r.value).toFixed(
+                                  selectedComp.category
+                                    ?.toLowerCase()
+                                    .includes("ph")
+                                    ? 2
+                                    : 1,
+                                )}{" "}
+                                <span className="text-[10px] font-medium text-gray-400 font-sans">
                                   {selectedComp.unit}
                                 </span>
                               </span>
@@ -751,41 +939,40 @@ export default function DeviceDetailPage() {
                             header: "Status",
                             cell: () => (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/10">
-                                STABLE
+                                VALID
                               </span>
                             ),
                           },
                         ]}
-                        data={sensorData.data || []}
+                        data={sensorDataArray.data || []}
                       />
                     </div>
 
-                    {/* Enhanced Pagination */}
                     {sensorPagination && sensorPagination.totalPages > 1 && (
-                      <div className="flex items-center justify-between mt-4 bg-gray-50 p-2 rounded-xl border border-gray-100">
+                      <div className="flex items-center justify-between bg-white p-2.5 rounded-2xl border border-gray-100 shadow-sm mt-auto">
                         <p className="text-[10px] text-gray-500 font-bold ml-2">
-                          {sensorPagination.currentPage}{" "}
+                          Page {sensorPagination.currentPage}{" "}
                           <span className="text-gray-300 mx-1">/</span>{" "}
                           {sensorPagination.totalPages}
                         </p>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1.5">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className={`h-7 w-7 p-0 rounded-lg bg-white border shadow-sm flex justify-center items-center ${sensorPage === 1 ? "opacity-50" : "hover:bg-emerald-50"}`}
+                            className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-sm ${sensorPage === 1 ? "opacity-50" : "hover:bg-emerald-50"}`}
                             disabled={sensorPage === 1}
                             onClick={() => setSensorPage((p) => p - 1)}
                           >
-                            <ArrowLeft className="w-4 h-4" />
+                            <ChevronLeft className="w-4 h-4 text-gray-600" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className={`h-7 w-7 p-0 rounded-lg bg-white border shadow-sm flex justify-center items-center ${sensorPage >= sensorPagination.totalPages ? "opacity-50" : "hover:bg-emerald-50"}`}
+                            className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-sm ${sensorPage >= sensorPagination.totalPages ? "opacity-50" : "hover:bg-emerald-50"}`}
                             disabled={sensorPage >= sensorPagination.totalPages}
                             onClick={() => setSensorPage((p) => p + 1)}
                           >
-                            <ArrowRight className="w-4 h-4 " />
+                            <ChevronRight className="w-4 h-4 text-gray-600" />
                           </Button>
                         </div>
                       </div>
@@ -794,13 +981,12 @@ export default function DeviceDetailPage() {
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="px-8 py-5 bg-gray-50/50 border-t flex justify-end gap-3">
+              <div className="px-8 py-5 bg-gray-50/50 border-t flex justify-end gap-3 sticky bottom-0 z-10">
                 <button
                   onClick={() => setIsCompDetailOpen(false)}
-                  className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-all hover:shadow-lg active:scale-95"
+                  className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-all active:scale-95"
                 >
-                  Done
+                  Close Monitor
                 </button>
               </div>
             </motion.div>
@@ -813,15 +999,17 @@ export default function DeviceDetailPage() {
 
 function InfoCard({label, val, icon: Icon, color}: any) {
   return (
-    <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4 shadow-sm">
-      <div className={`p-2 rounded-lg bg-gray-50 ${color}`}>
+    <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4 shadow-sm hover:border-gray-200 transition-all duration-300 group">
+      <div
+        className={`p-3 rounded-xl bg-gray-50 ${color} group-hover:scale-105 transition-transform`}
+      >
         <Icon className="w-5 h-5" />
       </div>
       <div>
         <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
           {label}
         </p>
-        <p className="text-xs font-bold text-gray-700 font-mono mt-0.5">
+        <p className="text-xs font-bold text-gray-700 font-mono mt-1 tracking-tight">
           {val}
         </p>
       </div>

@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Printer,
+  Camera,
 } from "lucide-react";
 import Button from "@/src/components/ui/button";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
@@ -25,7 +26,7 @@ import GenericFormModal from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
 import {toast} from "sonner";
 import {useState, useMemo, useEffect} from "react";
-import {motion, AnimatePresence} from "framer-motion";
+import {motion} from "framer-motion";
 import {useGetGreenhouseDeviceComponentSensor} from "@/src/hooks/use-deviceComponentSensor";
 import {
   useCreateDeviceComponents,
@@ -33,20 +34,13 @@ import {
   useUpdateDeviceComponents,
 } from "@/src/hooks/use-deviceComponents";
 import mqtt from "mqtt";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 // --- VALIDATION SCHEMA ---
 const DeviceComponentsSchema = z.object({
   name: z.string({required_error: "Name is required"}).min(2).trim(),
-  type: z.enum(["SENSOR", "ACTUATOR"], {required_error: "Type is required"}),
+  type: z.enum(["SENSOR", "ACTUATOR", "CAMERA"], {
+    required_error: "Type is required",
+  }),
   category: z.string().nullish(),
   unit: z.string().nullish(),
   pin: z.string().nullish(),
@@ -159,10 +153,7 @@ export default function DeviceDetailPage() {
         options,
       );
     } else {
-      createMutation.mutate(
-        {idDevice: deviceId, idGreenhouse: greenhouseId, ...data},
-        options,
-      );
+      createMutation.mutate({idDevice: deviceId, ...data}, options);
     }
   };
 
@@ -234,6 +225,8 @@ export default function DeviceDetailPage() {
           >
             {row.type === "SENSOR" ? (
               <Activity className="w-4 h-4" />
+            ) : row.type === "CAMERA" ? (
+              <Camera className="w-4 h-4" />
             ) : (
               <Fan className="w-4 h-4" />
             )}
@@ -518,6 +511,7 @@ export default function DeviceDetailPage() {
             options: [
               {label: "Sensor", value: "SENSOR"},
               {label: "Actuator", value: "ACTUATOR"},
+              {label: "Camera", value: "CAMERA"},
             ],
           },
           {name: "category", label: "Category"},

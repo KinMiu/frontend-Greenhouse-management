@@ -21,10 +21,9 @@ export const GetGreenhouseDeviceComponentsDetails = async (
 
 export const CreateDeviceComponents = async (
   idDevice: string,
-  idGreenhouse: string,
   data: DeviceComponentsFormType,
 ) => {
-  return apiFetch(`/device-components/${idGreenhouse}/${idDevice}`, {
+  return apiFetch(`/device-components/${idDevice}`, {
     method: "POST",
     body: JSON.stringify(data),
   });

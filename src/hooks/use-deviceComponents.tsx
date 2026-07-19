@@ -43,14 +43,9 @@ export const useCreateDeviceComponents = () => {
   return useMutation({
     mutationFn: ({
       idDevice,
-      idGreenhouse,
       ...data
-    }: {idDevice: string; idGreenhouse: string} & DeviceComponentsFormType) =>
-      CreateDeviceComponents(
-        idDevice,
-        idGreenhouse,
-        data as DeviceComponentsFormType,
-      ),
+    }: {idDevice: string} & DeviceComponentsFormType) =>
+      CreateDeviceComponents(idDevice, data as DeviceComponentsFormType),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});
     },
