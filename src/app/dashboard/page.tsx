@@ -104,6 +104,7 @@ export default function DashboardPage() {
       try {
         const data = JSON.parse(message.toString());
         const macAddress = topic.split("/")[1] || topic;
+        console.log(macAddress);
 
         setRealtimeData((prev) => ({
           ...prev,

@@ -15,7 +15,7 @@ import {
   useGetGreenhouseAreasAutomation,
   useUpdateAutomation,
 } from "@/src/hooks/use-automation";
-import {AreaType, DeviceType} from "@/src/types";
+import {DeviceType} from "@/src/types";
 import {motion} from "framer-motion";
 import {Edit, Eye, Trash2} from "lucide-react";
 import {useParams, useRouter} from "next/navigation";
@@ -50,7 +50,6 @@ export default function StaffRolePage() {
   const greenhouseId = params.greenhouseId as string;
 
   const {data: area_detail} = useGetAreaDetails(areaId);
-  // console.log(area_detail);
 
   const createMutation = useCreateAutomation();
   const updateMutation = useUpdateAutomation();
@@ -81,14 +80,39 @@ export default function StaffRolePage() {
       return;
     }
 
+    // Mengonversi waktu UTC ("HH:mm") dari server kembali ke format lokal browser
+    let displayTime = "00:00";
+    if (row.time && row.time.includes(":")) {
+      try {
+        const [utcHours, utcMinutes] = row.time.split(":").map(Number);
+
+        const dateObj = new Date();
+        // Set ke jam UTC yang dikirim dari server
+        dateObj.setUTCHours(utcHours);
+        dateObj.setUTCMinutes(utcMinutes);
+        dateObj.setUTCSeconds(0);
+        dateObj.setUTCMilliseconds(0);
+
+        // Ambil waktu lokal dari objek date tersebut
+        const localHours = String(dateObj.getHours()).padStart(2, "0");
+        const localMinutes = String(dateObj.getMinutes()).padStart(2, "0");
+        displayTime = `${localHours}:${localMinutes}`;
+      } catch (e) {
+        displayTime = row.time;
+      }
+    } else {
+      displayTime = row.time || "00:00";
+    }
+
     setSelectedData({
       id: row.id,
       deviceId: row.deviceId || "",
       componentId: row.componentId || "",
       action: row.action || "ON",
-      time: row.time || "00:00",
+      time: displayTime,
       duration: row.duration || 0,
     });
+
     if (row.deviceId) {
       setSelectedDeviceIdInForm(row.deviceId);
     }
@@ -96,11 +120,31 @@ export default function StaffRolePage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmitForm = (data: AreaFormType) => {
+  const handleSubmitForm = (data: any) => {
+    // 1. Pecah string jam lokal dari input form (ex: "18:20")
+    const [hours, minutes] = data.time.split(":").map(Number);
+
+    // 2. Bungkus ke objek waktu lokal laptop user saat ini
+    const localDate = new Date();
+    localDate.setHours(hours);
+    localDate.setMinutes(minutes);
+    localDate.setSeconds(0);
+    localDate.setMilliseconds(0);
+
+    // 3. Ekstrak jam dan menit dalam bentuk UTC murni
+    const utcHours = String(localDate.getUTCHours()).padStart(2, "0");
+    const utcMinutes = String(localDate.getUTCMinutes()).padStart(2, "0");
+    const utcTimeStr = `${utcHours}:${utcMinutes}`; // Hasilnya string murni "11:20"
+
+    // 4. Masukkan ke dalam request payload data
+    const payloadData = {
+      ...data,
+      time: utcTimeStr,
+    };
+
     if (selectedData) {
-      console.log(selectedData);
       updateMutation.mutate(
-        {id: selectedData.id, idGreenhouse: params.greenhouseId, ...data},
+        {id: selectedData.id, idGreenhouse: greenhouseId, ...payloadData},
         {
           onSuccess: (res: any) => {
             toast.success(res.message || "Greenhouse updated successfully");
@@ -112,8 +156,8 @@ export default function StaffRolePage() {
     } else {
       createMutation.mutate(
         {
-          idGreenhouse: params.greenhouseId,
-          ...data,
+          idGreenhouse: greenhouseId,
+          ...payloadData,
         },
         {
           onSuccess: (res: any) => {
@@ -129,7 +173,7 @@ export default function StaffRolePage() {
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this configuration?")) {
       deleteMutation.mutate(
-        {id: id, idGreenhouse: params.greenhouseId},
+        {id: id, idGreenhouse: greenhouseId},
         {
           onSuccess: (res: any) => {
             toast.success(res.message || "Configuration deleted successfully");
@@ -159,7 +203,28 @@ export default function StaffRolePage() {
         </span>
       ),
     },
-    {header: "Time", accessor: "time"},
+    {
+      header: "Time",
+      cell: (row) => {
+        // Mengonversi string UTC "HH:mm" dari backend ke string lokal agar enak dibaca di tabel dashboard
+        if (row.time && row.time.includes(":")) {
+          try {
+            const [utcHours, utcMinutes] = row.time.split(":").map(Number);
+            const dateObj = new Date();
+            dateObj.setUTCHours(utcHours);
+            dateObj.setUTCMinutes(utcMinutes);
+
+            return dateObj.toLocaleTimeString("id-ID", {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          } catch {
+            return row.time;
+          }
+        }
+        return row.time || "-";
+      },
+    },
     {header: "Duration", accessor: "duration"},
     {
       header: "Status",
@@ -213,7 +278,6 @@ export default function StaffRolePage() {
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   const getAreaActuator = useMemo(() => {
-    console.log(area_detail);
     return (
       area_detail?.data?.devices?.filter(
         (d: any) =>
@@ -222,24 +286,27 @@ export default function StaffRolePage() {
       ) || []
     );
   }, [area_detail, areaId]);
-  console.log("area", getAreaActuator);
 
-  const deviceConfig = useMemo(() =>
-    getAreaActuator.map((device: any) => ({
-      label: device.name,
-      value: device.id,
-    })),
+  const deviceConfig = useMemo(
+    () =>
+      getAreaActuator.map((device: any) => ({
+        label: device.name,
+        value: device.id,
+      })),
+    [getAreaActuator],
   );
 
   const componentsConfig = useMemo(() => {
     const activeDevice = getAreaActuator.find(
       (d: any) => d.id === selectedDeviceIdInForm,
     );
-    return activeDevice?.components?.map((component: any) => ({
-      label: component.name,
-      value: component.id,
-    }));
-  });
+    return (
+      activeDevice?.components?.map((component: any) => ({
+        label: component.name,
+        value: component.id,
+      })) || []
+    );
+  }, [getAreaActuator, selectedDeviceIdInForm]);
 
   const ConfigField: FormFieldConfig[] = useMemo(
     () => [
@@ -249,7 +316,6 @@ export default function StaffRolePage() {
         type: "select",
         placeholder: "Pilih Device...",
         options: deviceConfig,
-        // Kita tetap butuh ini supaya list component di bawahnya terupdate
         onChange: (e: any) => setSelectedDeviceIdInForm(e.target.value),
       },
       {
@@ -265,7 +331,7 @@ export default function StaffRolePage() {
       {
         name: "action",
         label: "Action",
-        type: "select", // Biasanya automation action itu pilihan (ON / OFF / TOGGLE)
+        type: "select",
         placeholder: "Pilih aksi...",
         options: [
           {label: "Turn On", value: "ON"},
@@ -275,7 +341,7 @@ export default function StaffRolePage() {
       {
         name: "time",
         label: "Execution Time",
-        type: "time", // Menggunakan input type="time" HTML asli
+        type: "time",
         placeholder: "Pilih waktu...",
       },
       {
@@ -296,16 +362,14 @@ export default function StaffRolePage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          {/* Teks diperbaiki */}
           <h1 className="text-2xl font-bold text-gray-800">
             Config Management
           </h1>
           <p className="text-gray-500">
-            Manage your configuration on Area {area_detail?.data.name}
+            Manage your configuration on Area {area_detail?.data?.name || "-"}
           </p>
         </div>
 
-        {/* Tombol ADD ditekuk untuk membuka Modal, bukan pindah halaman */}
         <Button variant="primary" onClick={handleOpenAdd}>
           + Add New Config
         </Button>
