@@ -192,7 +192,7 @@ export default function DeviceDetailPage() {
   useEffect(() => {
     if (!device || !isCameraDevice || !device.macAddress) return;
 
-    const cleanMac = device.macAddress.replace(/:/g, "");
+    const cleanMac = device.macAddress;
     const wsUrl = `wss://urken.psti-ubl.id/ws/viewer?mac=${cleanMac}`;
 
     console.log(`📡 Initiating Camera WS stream for: ${cleanMac}`);
