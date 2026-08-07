@@ -205,20 +205,7 @@ export default function DeviceDetailPage() {
     };
 
     ws.onmessage = (event) => {
-      console.log("=== 🔴 DATA GATEWAY MASUK ===");
-      console.log("TypeOf data:", typeof event.data);
-      console.log("Isi Instance Blob?:", event.data instanceof Blob);
-
-      // Kalau ternyata tipenya string, kita intip 50 karakter pertamanya
-      if (typeof event.data === "string") {
-        console.log("Preview isi data (String):", event.data.substring(0, 50));
-      } else if (event.data instanceof Blob) {
-        console.log("Ukuran Blob (Size):", event.data.size, "bytes");
-        console.log("Mime Type Blob:", event.data.type);
-      }
-      console.log("=============================");
-
-      // Logic render lama (keep dlu buat sementara)
+      // Karena backend sudah kirim BinaryMessage, event.data otomatis dibaca sebagai Blob oleh browser
       if (event.data instanceof Blob) {
         if (prevWsUrlRef.current) {
           URL.revokeObjectURL(prevWsUrlRef.current);
@@ -227,6 +214,8 @@ export default function DeviceDetailPage() {
         setCameraFrame(newFrameUrl);
         prevWsUrlRef.current = newFrameUrl;
         setWsFrameCount((prev) => prev + 1);
+      } else {
+        console.log("Data masuk tapi bukan Blob:", typeof event.data);
       }
     };
 
