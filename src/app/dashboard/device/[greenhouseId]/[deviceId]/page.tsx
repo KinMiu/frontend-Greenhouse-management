@@ -205,8 +205,12 @@ export default function DeviceDetailPage() {
     };
 
     ws.onmessage = (event) => {
-      // Karena backend sudah kirim BinaryMessage, event.data otomatis dibaca sebagai Blob oleh browser
+      // KITA LOG APAPUN YANG MASUK TANPA FILTER
+      console.log("📥 [WS MESSAGE RECEIVED!] Tipe data:", typeof event.data);
+
       if (event.data instanceof Blob) {
+        console.log("🟢 Valid Blob detected! Size:", event.data.size);
+
         if (prevWsUrlRef.current) {
           URL.revokeObjectURL(prevWsUrlRef.current);
         }
@@ -215,7 +219,12 @@ export default function DeviceDetailPage() {
         prevWsUrlRef.current = newFrameUrl;
         setWsFrameCount((prev) => prev + 1);
       } else {
-        console.log("Data masuk tapi bukan Blob:", typeof event.data);
+        console.warn(
+          "🟡 Data masuk tapi bukan Blob. Tipe:",
+          typeof event.data,
+          "Isi:",
+          event.data,
+        );
       }
     };
 
