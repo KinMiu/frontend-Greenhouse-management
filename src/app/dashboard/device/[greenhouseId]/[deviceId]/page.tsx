@@ -200,7 +200,7 @@ export default function DeviceDetailPage() {
     ws.binaryType = "blob";
 
     ws.onopen = () => {
-      console.log(`✅ Camera WS Connected [${cleanMac}]`);
+      console.log(`Camera WS Connected njix [${cleanMac}]`);
       setIsWsConnected(true);
     };
 
