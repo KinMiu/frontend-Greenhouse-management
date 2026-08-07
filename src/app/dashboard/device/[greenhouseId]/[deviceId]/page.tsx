@@ -204,6 +204,13 @@ export default function DeviceDetailPage() {
       setIsWsConnected(true);
     };
 
+    console.log(
+      "macAddress: ",
+      device?.macAddress,
+      " isCameraDevice: ",
+      isCameraDevice,
+    );
+
     ws.onmessage = (event) => {
       // KITA LOG APAPUN YANG MASUK TANPA FILTER
       console.log("📥 [WS MESSAGE RECEIVED!] Tipe data:", typeof event.data);
