@@ -135,7 +135,7 @@ export type ConfigFormType = {
 export type DeviceComponentsType = {
   id: string;
   name: string;
-  type: "SENSOR" | "ACTUATOR";
+  type: "SENSOR" | "ACTUATOR" | "CAMERA";
   category?: string | null;
   unit?: string | null;
   pin?: string | null;
@@ -145,7 +145,7 @@ export type DeviceComponentsType = {
 
 export type DeviceComponentsFormType = {
   name: string;
-  type: "SENSOR" | "ACTUATOR";
+  type: "SENSOR" | "ACTUATOR" | "CAMERA";
   category?: string | null | undefined;
   unit?: string | null | undefined;
   pin?: string | null | undefined;
