@@ -1,8 +1,8 @@
 import {apiFetch} from "../lib/api";
-import {StaffRoleFormType, StaffRoleType} from "../types";
+import {ApiResponse, StaffRoleFormType, StaffRoleType} from "../types";
 
 export const GetGreenhouseStaffRoles = async (id: string) => {
-  return apiFetch<StaffRoleType[]>(`/staff-roles/${id}/my`, {
+  return apiFetch<ApiResponse<StaffRoleType[]>>(`/staff-roles/${id}/my`, {
     method: "GET",
   });
 };

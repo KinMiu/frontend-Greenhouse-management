@@ -2,16 +2,8 @@ import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 
 import {
   DeviceComponentsFormType,
-  DeviceFromType,
   ToggleActuatorFormType,
 } from "../types";
-import {
-  CreateDevice,
-  DeleteDevice,
-  GetGreenhouseDevice,
-  GetGreenhouseDeviceDetails,
-  UpdateDevice,
-} from "../services/device.services";
 import {
   CreateDeviceComponents,
   DeleteDeviceComponents,
@@ -48,6 +40,7 @@ export const useCreateDeviceComponents = () => {
       CreateDeviceComponents(idDevice, data as DeviceComponentsFormType),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});
+      queryClient.invalidateQueries({queryKey: ["device"]});
     },
   });
 };
@@ -62,8 +55,8 @@ export const useUpdateDeviceComponents = () => {
       ...data
     }: {
       componentId: string;
-      deviceId: string;
-      idGreenhouse: string;
+      deviceId?: string;
+      idGreenhouse?: string;
     } & DeviceComponentsFormType) =>
       UpdateDeviceComponents(
         componentId,
@@ -73,6 +66,7 @@ export const useUpdateDeviceComponents = () => {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});
+      queryClient.invalidateQueries({queryKey: ["device"]});
     },
   });
 };
@@ -86,11 +80,12 @@ export const useDeleteDeviceComponents = () => {
       idGreenhouse,
     }: {
       componentId: string;
-      deviceId: string;
-      idGreenhouse: string;
+      deviceId?: string;
+      idGreenhouse?: string;
     }) => DeleteDeviceComponents(componentId, deviceId, idGreenhouse),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});
+      queryClient.invalidateQueries({queryKey: ["device"]});
     },
   });
 };

@@ -1,11 +1,11 @@
 import {apiFetch} from "../lib/api";
-import {ConfigFormType} from "../types";
+import {ApiResponse, ConfigFormType} from "../types";
 
 export const GetGreenhouseAreasAutomation = async (
   idGreenhouse: string,
   idArea: string,
 ) => {
-  return apiFetch<ConfigFormType[]>(`/automations/${idGreenhouse}/${idArea}`, {
+  return apiFetch<ApiResponse<ConfigFormType[]>>(`/automations/${idGreenhouse}/${idArea}`, {
     method: "GET",
   });
 };

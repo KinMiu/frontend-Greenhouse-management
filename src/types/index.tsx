@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type ApiResponse<T> = {
+  success?: boolean;
+  message?: string;
+  data: T;
+};
+
 export type SignUpType = {
   name: string;
   email: string;
@@ -15,8 +22,9 @@ export type UserType = {
   id: string;
   name: string;
   email: string;
-  role: "SUPERADMIN" | "OWNER" | "STAFF";
+  role: "SUPER_ADMIN" | "OWNER" | "STAFF";
   isActive: boolean;
+  data?: any;
 };
 
 export type GreenhousesType = {
@@ -25,6 +33,7 @@ export type GreenhousesType = {
   location: string;
   createdAt: Date;
   updatedAt: Date;
+  owner?: any;
 };
 
 export type GreenhouseFormType = {
@@ -75,15 +84,28 @@ export type DeviceType = {
   id: string;
   name: string;
   macAddress: string;
-  areaId?: string;
-  createdAt: string;
-  greenhouse: [];
+  areaId?: string | null;
+  type?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  greenhouse?: any;
+  components?: any[];
+  device?: any;
+  component?: any;
+  action?: string;
+  time?: string;
+  duration?: string | number;
+  data?: any;
 };
 
 export type DeviceFromType = {
   name: string;
   macAddress: string;
-  areaId?: string;
+  areaId?: string | null;
+  idGreenhouse?: string;
+  type?: string;
+  status?: string;
 };
 
 export type AreaType = {
@@ -94,6 +116,7 @@ export type AreaType = {
   permissions: string[];
   createdAt: Date;
   updatedAt: Date;
+  devices?: any[];
 };
 
 export type AreaFormType = {
@@ -106,17 +129,18 @@ export type ConfigFormType = {
   componentId: string;
   action: string;
   time: string;
-  duration: number;
+  duration: string | number;
 };
 
 export type DeviceComponentsType = {
   id: string;
   name: string;
   type: "SENSOR" | "ACTUATOR";
-  category?: string;
-  unit: string;
-  pin: string;
-  createdAt: Date;
+  category?: string | null;
+  unit?: string | null;
+  pin?: string | null;
+  createdAt?: Date;
+  data?: any;
 };
 
 export type DeviceComponentsFormType = {
@@ -128,5 +152,6 @@ export type DeviceComponentsFormType = {
 };
 
 export type ToggleActuatorFormType = {
-  name: boolean;
+  name?: boolean;
+  command?: boolean | string;
 };

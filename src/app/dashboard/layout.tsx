@@ -16,8 +16,9 @@ export default function DashboardLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // 1. Ambil data user & role dari Hook andalan Anda
-  const {data: users = [], isLoading, isError} = useGetMe();
-  const role = !isLoading && !isError && users?.data ? users.data.role : null;
+  const {data: users, isLoading, isError} = useGetMe();
+  const userData: any = (users as any)?.data || users;
+  const role = !isLoading && !isError && userData ? userData.role : null;
 
   console.log("Data Users:", users);
   console.log("Current User Role:", role);
@@ -38,14 +39,8 @@ export default function DashboardLayout({
     // === ATURAN MENTALIN USER ===
 
     // A. Proteksi Halaman Khusus Super Admin
-    if (pathname.startsWith("/dashboard/users") && role !== "SUPER_ADMIN") {
-      router.replace("/dashboard");
-      return;
-    }
-
-    // 🚀 B. Proteksi Halaman Device Master Baru Milik Admin (Sesuaikan dengan nama folder baru lo)
     if (
-      pathname.startsWith("/dashboard/device-master") &&
+      pathname.startsWith("/dashboard/super-admin") &&
       role !== "SUPER_ADMIN"
     ) {
       router.replace("/dashboard");

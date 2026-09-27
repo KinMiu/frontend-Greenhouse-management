@@ -1,8 +1,8 @@
 import {apiFetch} from "../lib/api";
-import {GreenhouseFormType, GreenhousesType} from "../types";
+import {ApiResponse, GreenhouseFormType, GreenhousesType} from "../types";
 
 export const GetMyGreenhouse = async () => {
-  return apiFetch<GreenhousesType>("/greenhouses/my", {
+  return apiFetch<ApiResponse<GreenhousesType[]>>("/greenhouses/my", {
     method: "GET",
   });
 };

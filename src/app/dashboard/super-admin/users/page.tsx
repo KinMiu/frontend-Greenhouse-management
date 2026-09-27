@@ -86,6 +86,8 @@ export default function UsersPage() {
     },
   ];
 
+  const userList = (users as any)?.data || (Array.isArray(users) ? users : []);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -102,7 +104,7 @@ export default function UsersPage() {
       >
         <Table
           columns={columns}
-          data={users.data || []}
+          data={userList}
           isLoading={isLoading}
           emptyMessage="No users found"
         />

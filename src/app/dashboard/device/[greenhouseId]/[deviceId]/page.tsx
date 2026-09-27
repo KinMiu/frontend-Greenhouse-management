@@ -7,32 +7,20 @@ import {
   Wifi,
   MapPin,
   Activity,
-  Trash2,
-  Edit,
   Clock,
   ArrowLeft,
   Fan,
   History,
   ChevronLeft,
   ChevronRight,
-  Video,
-  AlertCircle,
   X,
 } from "lucide-react";
 import Button from "@/src/components/ui/button";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
-import z from "zod";
-import GenericFormModal from "@/src/components/ui/genericFormModal";
 import Table, {TableColumn} from "@/src/components/ui/tabel";
-import {toast} from "sonner";
-import {useState, useMemo, useEffect, useRef} from "react";
+import {useState, useMemo, useEffect} from "react";
 import {motion, AnimatePresence} from "framer-motion";
 import {useGetGreenhouseDeviceComponentSensor} from "@/src/hooks/use-deviceComponentSensor";
-import {
-  useCreateDeviceComponents,
-  useDeleteDeviceComponents,
-  useUpdateDeviceComponents,
-} from "@/src/hooks/use-deviceComponents";
 import mqtt from "mqtt";
 import {
   CartesianGrid,
@@ -44,26 +32,13 @@ import {
   YAxis,
 } from "recharts";
 
-// --- VALIDATION SCHEMA ---
-const DeviceComponentsSchema = z.object({
-  name: z.string({required_error: "Name is required"}).min(2).trim(),
-  type: z.enum(["SENSOR", "ACTUATOR"], {required_error: "Type is required"}),
-  category: z.string().nullish(),
-  unit: z.string().nullish(),
-  pin: z.string().nullish(),
-});
-
-type DeviceComponentsFormType = z.infer<typeof DeviceComponentsSchema>;
-
 export default function DeviceDetailPage() {
   const params = useParams();
   const router = useRouter();
 
-  // -- States Umum --
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // -- States --
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyLogs, setHistoryLogs] = useState<any>(null);
-  const [selectedData, setSelectedData] = useState<any>(null);
   const [isCompDetailOpen, setIsCompDetailOpen] = useState(false);
   const [selectedComp, setSelectedComp] = useState<any>(null);
 
@@ -75,13 +50,6 @@ export default function DeviceDetailPage() {
   const deviceId = params.deviceId as string;
   const greenhouseId = params.greenhouseId as string;
 
-  // -- Camera Stream States (WebSocket) --
-  const [isWsConnected, setIsWsConnected] = useState(false);
-  const [cameraFrame, setCameraFrame] = useState<string | null>(null);
-  const [wsFrameCount, setWsFrameCount] = useState(0);
-  const prevWsUrlRef = useRef<string | null>(null);
-
-  // -- States Grafik MQTT --
   const [chartData, setChartData] = useState<{time: string; value: number}[]>(
     [],
   );
@@ -92,17 +60,7 @@ export default function DeviceDetailPage() {
     isLoading,
     isError,
   } = useGetGreenhouseDeviceDetails(deviceId);
-  const device = response?.data;
-
-  // --- LOGIKA PINTAR PENENTU TAMPILAN KAMERA ---
-  // Memeriksa properti device.type ATAU mendeteksi apakah salah satu komponen bertipe "CAMERA"
-  const isCameraDevice = useMemo(() => {
-    if (!device) return false;
-    const hasCameraComponent = device.components?.some(
-      (comp: any) => comp.type === "CAMERA",
-    );
-    return device.type === "CAMERA" || hasCameraComponent;
-  }, [device]);
+  const device: any = (response as any)?.data || response;
 
   // --- DATA FETCHING (Sensor Log dari DB untuk Modal) ---
   const {data: sensorResponse, isLoading: isLoadingSensor} =
@@ -111,8 +69,8 @@ export default function DeviceDetailPage() {
       selectedComp?.id,
       sensorPage,
     );
-  const sensorDataArray = sensorResponse?.data || [];
-  const sensorPagination = sensorResponse?.data.pagination;
+  const sensorDataArray: any[] = (sensorResponse as any)?.data?.data || (sensorResponse as any)?.data || [];
+  const sensorPagination = (sensorResponse as any)?.data?.pagination || (sensorResponse as any)?.pagination;
 
   // --- CLIENT-SIDE PAGINATION LOGIC (Main Table) ---
   const {paginatedComponents, totalMainPages} = useMemo(() => {
@@ -124,12 +82,6 @@ export default function DeviceDetailPage() {
       totalMainPages: totalPages,
     };
   }, [device?.components, mainTablePage]);
-
-  // --- MUTATIONS ---
-  const createMutation = useCreateDeviceComponents();
-  const updateMutation = useUpdateDeviceComponents();
-  const deleteMutation = useDeleteDeviceComponents();
-  const isPending = createMutation.isPending || updateMutation.isPending;
 
   // --- HANDLERS ---
   const handleOpenCompDetail = (component: any) => {
@@ -143,118 +95,7 @@ export default function DeviceDetailPage() {
     setHistoryLogs(data);
   };
 
-  const handleOpenEdit = (row: any) => {
-    setSelectedData({...row});
-    setIsModalOpen(true);
-  };
-
-  const handleSubmitForm = (data: DeviceComponentsFormType) => {
-    const options = {
-      onSuccess: (res: any) => {
-        toast.success(res.message || "Success");
-        setIsModalOpen(false);
-        window.location.reload();
-      },
-      onError: (err: any) => toast.error(err.message),
-    };
-
-    if (selectedData) {
-      updateMutation.mutate(
-        {
-          componentId: selectedData.id,
-          deviceId,
-          idGreenhouse: greenhouseId,
-          ...data,
-        },
-        options,
-      );
-    } else {
-      createMutation.mutate(
-        {idDevice: deviceId, idGreenhouse: greenhouseId, ...data},
-        options,
-      );
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this component?")) {
-      deleteMutation.mutate(
-        {componentId: id, deviceId, idGreenhouse: greenhouseId},
-        {
-          onSuccess: () => window.location.reload(),
-          onError: (err: any) => toast.error(err.message),
-        },
-      );
-    }
-  };
-
-  // --- EFFECT 1: WebSocket Camera Stream ---
-  useEffect(() => {
-    if (!device || !isCameraDevice || !device.macAddress) return;
-
-    const cleanMac = device.macAddress;
-    const wsUrl = `wss://urken.psti-ubl.id/ws/viewer?mac=${cleanMac}`;
-
-    console.log(`📡 Initiating Camera WS stream for: ${cleanMac}`);
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = "blob";
-
-    ws.onopen = () => {
-      console.log(`Camera WS Connected njix [${cleanMac}]`);
-      setIsWsConnected(true);
-    };
-
-    console.log(
-      "macAddress: ",
-      device?.macAddress,
-      " isCameraDevice: ",
-      isCameraDevice,
-    );
-
-    ws.onmessage = (event) => {
-      // KITA LOG APAPUN YANG MASUK TANPA FILTER
-      console.log("📥 [WS MESSAGE RECEIVED!] Tipe data:", typeof event.data);
-
-      if (event.data instanceof Blob) {
-        console.log("🟢 Valid Blob detected! Size:", event.data.size);
-
-        if (prevWsUrlRef.current) {
-          URL.revokeObjectURL(prevWsUrlRef.current);
-        }
-        const newFrameUrl = URL.createObjectURL(event.data);
-        setCameraFrame(newFrameUrl);
-        prevWsUrlRef.current = newFrameUrl;
-        setWsFrameCount((prev) => prev + 1);
-      } else {
-        console.warn(
-          "🟡 Data masuk tapi bukan Blob. Tipe:",
-          typeof event.data,
-          "Isi:",
-          event.data,
-        );
-      }
-    };
-
-    ws.onclose = (event) => {
-      console.warn("❌ Camera WS Disconnected!", event.code);
-      setIsWsConnected(false);
-      setCameraFrame(null);
-    };
-
-    ws.onerror = (error) => {
-      console.error("⚠️ Camera WS Error:", error);
-    };
-
-    return () => {
-      console.log("🔌 Cleaning up Camera WS connection...");
-      ws.close();
-      if (prevWsUrlRef.current) {
-        URL.revokeObjectURL(prevWsUrlRef.current);
-      }
-    };
-  }, [device?.macAddress, isCameraDevice]);
-
-  // --- EFFECT 2: MQTT Real-time Chart ---
+  // --- MQTT Real-time Chart ---
   useEffect(() => {
     if (
       !isCompDetailOpen ||
@@ -357,7 +198,7 @@ export default function DeviceDetailPage() {
       className: "text-right",
       cell: (row) => (
         <div className="flex items-center justify-end gap-2">
-          {row.type === "SENSOR" && (
+          {row.type === "SENSOR" ? (
             <Button
               onClick={() => handleOpenCompDetail(row)}
               variant="ghost"
@@ -366,21 +207,9 @@ export default function DeviceDetailPage() {
             >
               <Activity className="w-4 h-4" />
             </Button>
+          ) : (
+            <span className="text-xs text-gray-400">-</span>
           )}
-          <Button
-            onClick={() => handleOpenEdit(row)}
-            variant="ghost"
-            className="p-2 text-blue-600 hover:bg-blue-50"
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            onClick={() => handleDelete(row.id)}
-            variant="ghost"
-            className="p-2 text-red-600 hover:bg-red-50"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
         </div>
       ),
     },
@@ -471,31 +300,15 @@ export default function DeviceDetailPage() {
               {device.name}
             </h1>
             <p className="text-gray-500 text-sm">
-              {isCameraDevice
-                ? "Live Video Stream Dashboard"
-                : "Hardware Configuration Node"}
+              Hardware Configuration Node
             </p>
           </div>
         </div>
 
         <div className="flex flex-row justify-center items-center gap-3">
-          <div
-            className={`px-3 py-1.5 rounded-full font-bold text-[11px] flex items-center gap-2 border shadow-inner transition-all ${
-              isCameraDevice
-                ? isWsConnected
-                  ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                  : "bg-rose-50 text-rose-600 border-rose-200"
-                : "bg-emerald-50 text-emerald-600 border-emerald-200"
-            }`}
-          >
-            <div
-              className={`w-2 h-2 rounded-full ${isCameraDevice && !isWsConnected ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`}
-            />
-            {isCameraDevice
-              ? isWsConnected
-                ? "WS LIVE"
-                : "WS OFFLINE"
-              : "NODE ONLINE"}
+          <div className="px-3 py-1.5 rounded-full font-bold text-[11px] flex items-center gap-2 border shadow-inner transition-all bg-emerald-50 text-emerald-600 border-emerald-200">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            NODE ONLINE
           </div>
 
           <Button
@@ -547,195 +360,70 @@ export default function DeviceDetailPage() {
         </div>
       </div>
 
-      {/* 3. ADAPTIVE CONTENT AREA */}
-      {isCameraDevice ? (
-        // ================= TAMPILAN JIKA KAMERA (Hanya Stream) =================
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <motion.div
-            initial={{opacity: 0, y: 15}}
-            animate={{opacity: 1, y: 0}}
-            className="lg:col-span-2 bg-white border border-gray-200 rounded-3xl shadow-sm overflow-hidden flex flex-col"
-          >
-            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-zinc-50/50">
-              <h3 className="font-bold text-sm text-gray-700 flex items-center gap-2">
-                <Video className="w-4 h-4 text-blue-500" />
-                Live CCTV Stream
-              </h3>
-              {isWsConnected && cameraFrame && (
-                <span className="text-[9px] bg-rose-500 text-white font-black uppercase tracking-widest px-2 py-0.5 rounded-sm animate-pulse">
-                  LIVE
-                </span>
-              )}
-            </div>
-
-            <div className="relative w-full aspect-video max-h-[480px] bg-zinc-950 flex items-center justify-center overflow-hidden border-t border-gray-900">
-              {cameraFrame ? (
-                <img
-                  src={cameraFrame}
-                  alt="Live Camera Stream"
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-500 gap-3 p-8 border border-dashed border-zinc-700 rounded-2xl bg-zinc-900">
-                  {isWsConnected ? (
-                    <>
-                      <Activity className="w-10 h-10 animate-spin text-green-500" />
-                      <p className="text-xs font-medium tracking-wide text-zinc-400 text-center">
-                        Connecting successfully.
-                        <br />
-                        Decoding incoming binary frames...
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="w-10 h-10 text-rose-600" />
-                      <p className="text-xs font-medium text-zinc-500 text-center">
-                        Stream offline or blocked.
-                        <br />
-                        Awaiting camera handshake / HTTPS check.
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
-
-          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 px-1">
-              Stream Metrics
-            </h4>
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-center gap-4">
-              <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
-                <Video className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                  Protocol
-                </p>
-                <p className="text-sm font-bold text-gray-700 font-mono mt-0.5">
-                  WebSocket (Binary Blob)
-                </p>
-              </div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4">
-              <div className="p-2.5 rounded-lg bg-purple-50 text-purple-500">
-                <Activity className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                  Data Throughput
-                </p>
-                <p className="text-sm font-bold text-gray-700 font-mono mt-0.5">
-                  {wsFrameCount.toLocaleString()}{" "}
-                  <span className="text-xs font-normal text-gray-400">
-                    frames received
-                  </span>
-                </p>
-              </div>
-            </div>
-          </div>
+      {/* 3. HARDWARE COMPONENTS TABLE */}
+      <motion.div
+        initial={{opacity: 0, y: 20}}
+        animate={{opacity: 1, y: 0}}
+        transition={{duration: 0.4}}
+        className="space-y-4"
+      >
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-emerald-500" /> Attached Hardware
+            Components
+          </h3>
         </div>
-      ) : (
-        // ================= TAMPILAN JIKA SENSOR/ACTUATOR (Hanya Tabel Component) =================
-        <motion.div
-          initial={{opacity: 0, y: 20}}
-          animate={{opacity: 1, y: 0}}
-          transition={{duration: 0.4}}
-          className="space-y-4"
-        >
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-emerald-500" /> Attached Hardware
-              Components
-            </h3>
-          </div>
 
-          <div className="bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-            <Table
-              columns={columns}
-              data={paginatedComponents}
-              emptyMessage="No components attached to this node."
-            />
-          </div>
+        <div className="bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <Table
+            columns={columns}
+            data={paginatedComponents}
+            emptyMessage="No components attached to this node."
+          />
+        </div>
 
-          {totalMainPages > 1 && (
-            <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-2">
-                Showing {paginatedComponents.length} of{" "}
-                {device?.components.length} components
-              </p>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
-                  disabled={mainTablePage === 1}
-                  onClick={() => setMainTablePage((p) => p - 1)}
-                >
-                  <ChevronLeft className="w-4 h-4 text-gray-600" />
-                </Button>
-                <div className="flex gap-1">
-                  {Array.from({length: totalMainPages}, (_, i) => i + 1).map(
-                    (pageNum) => (
-                      <button
-                        key={pageNum}
-                        onClick={() => setMainTablePage(pageNum)}
-                        className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${mainTablePage === pageNum ? "bg-emerald-500 text-white shadow-md" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
-                      >
-                        {pageNum}
-                      </button>
-                    ),
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
-                  disabled={mainTablePage >= totalMainPages}
-                  onClick={() => setMainTablePage((p) => p + 1)}
-                >
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                </Button>
+        {totalMainPages > 1 && (
+          <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-2">
+              Showing {paginatedComponents.length} of{" "}
+              {device?.components?.length || 0} components
+            </p>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
+                disabled={mainTablePage === 1}
+                onClick={() => setMainTablePage((p) => p - 1)}
+              >
+                <ChevronLeft className="w-4 h-4 text-gray-600" />
+              </Button>
+              <div className="flex gap-1">
+                {Array.from({length: totalMainPages}, (_, i) => i + 1).map(
+                  (pageNum) => (
+                    <button
+                      key={pageNum}
+                      onClick={() => setMainTablePage(pageNum)}
+                      className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${mainTablePage === pageNum ? "bg-emerald-500 text-white shadow-md" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                    >
+                      {pageNum}
+                    </button>
+                  ),
+                )}
               </div>
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
+                disabled={mainTablePage >= totalMainPages}
+                onClick={() => setMainTablePage((p) => p + 1)}
+              >
+                <ChevronRight className="w-4 h-4 text-gray-600" />
+              </Button>
             </div>
-          )}
-        </motion.div>
-      )}
+          </div>
+        )}
+      </motion.div>
 
-      {/* --- 4. MODAL EDIT CONFIGURATION --- */}
-      <GenericFormModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Edit Component Configuration"
-        schema={DeviceComponentsSchema}
-        fields={[
-          {name: "name", label: "Name"},
-          {
-            name: "type",
-            label: "Type",
-            type: "select",
-            options: [
-              {label: "Sensor", value: "SENSOR"},
-              {label: "Actuator", value: "ACTUATOR"},
-            ],
-          },
-          {name: "category", label: "Category"},
-          {name: "unit", label: "Unit"},
-          {name: "pin", label: "Pin/Key (MQTT Payload Key)"},
-        ]}
-        defaultValues={
-          selectedData || {
-            name: "",
-            type: "SENSOR",
-            category: "",
-            unit: "",
-            pin: "",
-          }
-        }
-        onSubmit={handleSubmitForm}
-        isLoading={isPending}
-      />
+
 
       {/* --- 5. MODAL CONNECTION LOGS --- */}
       <AnimatePresence>
@@ -916,7 +604,7 @@ export default function DeviceDetailPage() {
                         columns={[
                           {
                             header: "Timestamp",
-                            cell: (r) => (
+                            cell: (r: any) => (
                               <div className="flex flex-col font-mono text-[11px]">
                                 <span className="font-bold text-gray-700">
                                   {new Date(r.createdAt)
@@ -939,7 +627,7 @@ export default function DeviceDetailPage() {
                           },
                           {
                             header: "Value",
-                            cell: (r) => (
+                            cell: (r: any) => (
                               <span className="font-black text-emerald-600 text-sm tracking-tight">
                                 {Number(r.value).toFixed(
                                   selectedComp.category
@@ -963,7 +651,7 @@ export default function DeviceDetailPage() {
                             ),
                           },
                         ]}
-                        data={sensorDataArray.data || []}
+                        data={Array.isArray(sensorDataArray) ? sensorDataArray : []}
                       />
                     </div>
 
@@ -977,7 +665,6 @@ export default function DeviceDetailPage() {
                         <div className="flex gap-1.5">
                           <Button
                             variant="ghost"
-                            size="sm"
                             className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-sm ${sensorPage === 1 ? "opacity-50" : "hover:bg-emerald-50"}`}
                             disabled={sensorPage === 1}
                             onClick={() => setSensorPage((p) => p - 1)}
@@ -986,7 +673,6 @@ export default function DeviceDetailPage() {
                           </Button>
                           <Button
                             variant="ghost"
-                            size="sm"
                             className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-sm ${sensorPage >= sensorPagination.totalPages ? "opacity-50" : "hover:bg-emerald-50"}`}
                             disabled={sensorPage >= sensorPagination.totalPages}
                             onClick={() => setSensorPage((p) => p + 1)}

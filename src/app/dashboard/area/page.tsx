@@ -50,24 +50,30 @@ export default function StaffRolePage() {
   const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
 
   const {
-    data: greenhouses = [],
+    data: greenhouses,
     isLoading: isLoadingGreenhouse,
     isError: isErrorGreenhouse,
     error: errorGreenhouse,
   } = useGetMyGreenhouses();
 
+  const greenhouseList: GreenhousesType[] =
+    (greenhouses as any)?.data || (Array.isArray(greenhouses) ? greenhouses : []);
+
   useEffect(() => {
-    if (greenhouses.data?.length > 0 && selectedGreenhouseId === "") {
-      setSelectedGreenhouseId(greenhouses.data[0].id);
+    if (greenhouseList.length > 0 && selectedGreenhouseId === "") {
+      setSelectedGreenhouseId(greenhouseList[0].id);
     }
-  }, [greenhouses, selectedGreenhouseId]);
+  }, [greenhouseList, selectedGreenhouseId]);
 
   const {
-    data: areas = [],
+    data: areas,
     isLoading: isLoadingAreas,
     isError: isErrorAreas,
     error: errorAreas,
   } = useGetGreenhouseAreas(selectedGreenhouseId);
+
+  const areaList: AreaType[] =
+    (areas as any)?.data || (Array.isArray(areas) ? areas : []);
 
   const createMutation = useCreateArea();
   const updateMutation = useUpdateArea();
@@ -243,7 +249,7 @@ export default function StaffRolePage() {
             className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-green-500 shadow-sm"
           >
             {/* <option value="">Greenhouse</option> */}
-            {greenhouses.data?.map((gh: GreenhousesType) => (
+            {greenhouseList.map((gh: GreenhousesType) => (
               <option key={gh.id} value={gh.id}>
                 {gh.name}
               </option>
@@ -263,7 +269,7 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={areas.data || []}
+          data={areaList}
           isLoading={isLoadingAreas}
           emptyMessage="No users found"
         />

@@ -56,13 +56,14 @@ export default function StaffRolePage() {
   const deleteMutation = useDeleteAutomation();
 
   const {
-    data: automationConfig = [],
+    data: automationConfig,
     isLoading: isLoadingConfig,
     isError,
+    error,
   } = useGetGreenhouseAreasAutomation(greenhouseId, areaId);
 
   if (isError) {
-    toast.error(isError?.message || "Failed to fetch areas");
+    toast.error((error as any)?.message || "Failed to fetch areas");
   }
 
   const handleOpenAdd = () => {
@@ -381,7 +382,7 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={automationConfig?.data || []}
+          data={(automationConfig as any)?.data || (Array.isArray(automationConfig) ? automationConfig : [])}
           isLoading={isLoadingConfig}
           emptyMessage="No users found"
         />

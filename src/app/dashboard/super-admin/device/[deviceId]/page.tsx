@@ -17,7 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Printer,
-  Camera,
 } from "lucide-react";
 import Button from "@/src/components/ui/button";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
@@ -35,12 +34,9 @@ import {
 } from "@/src/hooks/use-deviceComponents";
 import mqtt from "mqtt";
 
-// --- VALIDATION SCHEMA ---
 const DeviceComponentsSchema = z.object({
-  name: z.string({required_error: "Name is required"}).min(2).trim(),
-  type: z.enum(["SENSOR", "ACTUATOR", "CAMERA"], {
-    required_error: "Type is required",
-  }),
+  name: z.string().min(2, "Name is required").trim(),
+  type: z.enum(["SENSOR", "ACTUATOR"]),
   category: z.string().nullish(),
   unit: z.string().nullish(),
   pin: z.string().nullish(),
@@ -77,7 +73,7 @@ export default function DeviceDetailPage() {
     isLoading,
     isError,
   } = useGetGreenhouseDeviceDetails(deviceId);
-  const device = response?.data;
+  const device: any = (response as any)?.data || response;
 
   // --- FETCH SENSOR DATA ---
   const {data: sensorResponse, isLoading: isLoadingSensor} =
@@ -87,7 +83,7 @@ export default function DeviceDetailPage() {
       sensorPage,
     );
 
-  const sensorData = sensorResponse?.data || [];
+  const sensorData: any[] = (sensorResponse as any)?.data || sensorResponse || [];
 
   // --- CLIENT-SIDE PAGINATION LOGIC (Main Table) ---
   const {paginatedComponents, totalMainPages} = useMemo(() => {
@@ -225,8 +221,6 @@ export default function DeviceDetailPage() {
           >
             {row.type === "SENSOR" ? (
               <Activity className="w-4 h-4" />
-            ) : row.type === "CAMERA" ? (
-              <Camera className="w-4 h-4" />
             ) : (
               <Fan className="w-4 h-4" />
             )}
@@ -456,7 +450,6 @@ export default function DeviceDetailPage() {
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
-                size="sm"
                 className="h-8 w-8 p-0 border border-gray-200 bg-white"
                 disabled={mainTablePage === 1}
                 onClick={() => setMainTablePage((p) => p - 1)}
@@ -484,7 +477,6 @@ export default function DeviceDetailPage() {
 
               <Button
                 variant="ghost"
-                size="sm"
                 className="h-8 w-8 p-0 border border-gray-200 bg-white"
                 disabled={mainTablePage >= totalMainPages}
                 onClick={() => setMainTablePage((p) => p + 1)}
@@ -511,7 +503,6 @@ export default function DeviceDetailPage() {
             options: [
               {label: "Sensor", value: "SENSOR"},
               {label: "Actuator", value: "ACTUATOR"},
-              {label: "Camera", value: "CAMERA"},
             ],
           },
           {name: "category", label: "Category"},

@@ -31,12 +31,12 @@ export const CreateDeviceComponents = async (
 
 export const UpdateDeviceComponents = async (
   componentId: string,
-  deviceId: string,
-  idGreenhouse: string,
-  data: DeviceComponentsFormType,
+  deviceId?: string,
+  idGreenhouse?: string,
+  data?: DeviceComponentsFormType,
 ) => {
   return apiFetch(
-    `/device-components/${idGreenhouse}/${deviceId}/${componentId}`,
+    `/device-components/${componentId}`,
     {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -46,11 +46,11 @@ export const UpdateDeviceComponents = async (
 
 export const DeleteDeviceComponents = async (
   componentId: string,
-  deviceId: string,
-  idGreenhouse: string,
+  deviceId?: string,
+  idGreenhouse?: string,
 ) => {
   return apiFetch(
-    `/device-components/${idGreenhouse}/${deviceId}/${componentId}`,
+    `/device-components/${componentId}`,
     {
       method: "DELETE",
     },

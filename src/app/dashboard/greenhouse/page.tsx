@@ -46,7 +46,7 @@ export default function GreenhousePage() {
   >(null);
 
   const {
-    data: greenhouses = [],
+    data: greenhouses,
     isLoading,
     isError,
     error,
@@ -210,7 +210,7 @@ export default function GreenhousePage() {
       >
         <Table
           columns={columns}
-          data={greenhouses.data || []}
+          data={(greenhouses as any)?.data || (Array.isArray(greenhouses) ? greenhouses : [])}
           isLoading={isLoading}
           emptyMessage="No users found"
         />

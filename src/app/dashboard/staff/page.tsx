@@ -44,35 +44,39 @@ export default function StaffRolePage() {
   const [selectedGreenhouseId, setSelectedGreenhouseId] = useState<string>("");
 
   const {
-    data: greenhouses = [],
+    data: greenhouses,
     isLoading: isLoadingGreenhouse,
     isError: isErrorGreenhouse,
     error: errorGreenhouse,
   } = useGetMyGreenhouses();
 
-  console.log(greenhouses);
+  const greenhouseList: GreenhousesType[] =
+    (greenhouses as any)?.data || (Array.isArray(greenhouses) ? greenhouses : []);
 
   useEffect(() => {
-    if (greenhouses.length > 0 && selectedGreenhouseId === "") {
-      setSelectedGreenhouseId(greenhouses[0].id);
+    if (greenhouseList.length > 0 && selectedGreenhouseId === "") {
+      setSelectedGreenhouseId(greenhouseList[0].id);
     }
-  }, [greenhouses, selectedGreenhouseId]);
+  }, [greenhouseList, selectedGreenhouseId]);
 
   const {
-    data: staffRoles = [],
-    // isLoading: isLoadingStaffRoles,
+    data: staffRoles,
     isError: isErrorStaffRoles,
     error: errorStaffRoles,
   } = useGetGreenhouseStaffRoles(selectedGreenhouseId);
 
-  // console.log("Staff Role", staffRoles);
+  const roleList: any[] =
+    (staffRoles as any)?.data || (Array.isArray(staffRoles) ? staffRoles : []);
 
   const {
-    data: staff = [],
+    data: staff,
     isLoading: isLoadingStaff,
     isError: isErrorStaff,
     error: errorStaff,
   } = useGetGreenhouseStaff(selectedGreenhouseId);
+
+  const staffList: StaffType[] =
+    (staff as any)?.data || (Array.isArray(staff) ? staff : []);
 
   // console.log("Staff", staff);
 
@@ -161,7 +165,7 @@ export default function StaffRolePage() {
     }
   };
 
-  const staffRoleConfig = staffRoles.data?.map((role: any) => ({
+  const staffRoleConfig = roleList.map((role: any) => ({
     label: role.name,
     value: role.id,
   }));
@@ -196,10 +200,12 @@ export default function StaffRolePage() {
         const staffRole = row.staffRoles;
         return (
           <>
-            {staffRole === null ? (
+            {!staffRole ? (
               <Badge color="red">No Role</Badge>
             ) : (
-              <Badge color="green">{staffRole?.name}</Badge>
+              <Badge color="green">
+                {typeof staffRole === "object" ? (staffRole as any)?.name : String(staffRole)}
+              </Badge>
             )}
           </>
         );
@@ -296,7 +302,7 @@ export default function StaffRolePage() {
             className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-green-500 shadow-sm"
           >
             <option value="">Greenhouse</option>
-            {greenhouses.data?.map((gh: GreenhousesType) => (
+            {greenhouseList.map((gh: GreenhousesType) => (
               <option key={gh.id} value={gh.id}>
                 {gh.name}
               </option>
@@ -316,7 +322,7 @@ export default function StaffRolePage() {
       >
         <Table
           columns={columns}
-          data={staff.data || []}
+          data={staffList}
           isLoading={isLoadingStaff}
           emptyMessage="No users found"
         />

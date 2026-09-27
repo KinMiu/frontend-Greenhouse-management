@@ -1,5 +1,5 @@
 import {apiFetch} from "../lib/api";
-import {SignInType, SignUpType} from "../types";
+import {ApiResponse, SignInType, SignUpType, UserType} from "../types";
 
 export const SignUp = async (data: SignUpType) => {
   return apiFetch("/auth/register-owner", {
@@ -17,7 +17,7 @@ export const SignIn = async (data: SignInType) => {
 };
 
 export const GetMe = async () => {
-  return apiFetch("/auth/me", {
+  return apiFetch<ApiResponse<UserType>>("/auth/me", {
     method: "GET",
   });
 };

@@ -29,17 +29,19 @@ export const CreateDevice = async (data: DeviceFromType) => {
 
 export const UpdateDevice = async (
   id: string,
-  idGreenhouse: string,
-  data: DeviceFromType,
+  idGreenhouse?: string,
+  data?: DeviceFromType,
 ) => {
-  return apiFetch(`/device/${idGreenhouse}/${id}`, {
+  const url = idGreenhouse ? `/device/${idGreenhouse}/${id}` : `/device/${id}`;
+  return apiFetch(url, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
 };
 
-export const DeleteDevice = async (id: string, idGreenhouse: string) => {
-  return apiFetch(`/device/${idGreenhouse}/${id}`, {
+export const DeleteDevice = async (id: string, idGreenhouse?: string) => {
+  const url = idGreenhouse ? `/device/${idGreenhouse}/${id}` : `/device/${id}`;
+  return apiFetch(url, {
     method: "DELETE",
   });
 };

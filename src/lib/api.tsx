@@ -23,6 +23,16 @@ export async function apiFetch<T>(
   });
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("userData");
+      if (
+        !window.location.pathname.startsWith("/signin") &&
+        !window.location.pathname.startsWith("/signup")
+      ) {
+        window.location.href = "/signin";
+      }
+    }
     let errorMessage = "Request failed";
     try {
       const errorData = await res.json();

@@ -1,15 +1,14 @@
 import {apiFetch} from "../lib/api";
-import {AreaFormType, AreaType} from "../types";
+import {ApiResponse, AreaFormType, AreaType} from "../types";
 
 export const GetGreenhouseAreas = async (id: string) => {
-  return apiFetch<AreaType[]>(`/areas/${id}/my`, {
+  return apiFetch<ApiResponse<AreaType[]>>(`/areas/${id}/my`, {
     method: "GET",
   });
 };
 
 export const GetAreaDetails = async (id: string) => {
-  console.log("dari service", id);
-  return apiFetch<AreaType[]>(`/areas/${id}`, {
+  return apiFetch<ApiResponse<AreaType>>(`/areas/${id}`, {
     method: "GET",
   });
 };

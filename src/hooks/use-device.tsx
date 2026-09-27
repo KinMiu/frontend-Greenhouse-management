@@ -52,7 +52,7 @@ export const useUpdateDevice = () => {
       id,
       idGreenhouse,
       ...data
-    }: {id: string; idGreenhouse: string} & DeviceFromType) =>
+    }: {id: string; idGreenhouse?: string} & DeviceFromType) =>
       UpdateDevice(id, idGreenhouse, data as DeviceFromType),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});
@@ -63,7 +63,7 @@ export const useUpdateDevice = () => {
 export const useDeleteDevice = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({id, idGreenhouse}: {id: string; idGreenhouse: string}) =>
+    mutationFn: ({id, idGreenhouse}: {id: string; idGreenhouse?: string}) =>
       DeleteDevice(id, idGreenhouse),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ["devices"]});

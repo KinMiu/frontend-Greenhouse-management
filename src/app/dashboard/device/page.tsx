@@ -15,7 +15,7 @@ import {
   useUpdateDevice,
 } from "@/src/hooks/use-device";
 import {useGetMyGreenhouses} from "@/src/hooks/use-greenhouses";
-import {DeviceType, GreenhousesType} from "@/src/types";
+import {AreaType, DeviceType, GreenhousesType} from "@/src/types";
 import {motion, AnimatePresence} from "framer-motion";
 import {
   Edit,
@@ -91,21 +91,25 @@ export default function DevicePage() {
     resolver: zodResolver(AddDeviceSchema),
   });
 
-  const {data: greenhouses = [], isLoading: isLoadingGreenhouse} =
+  const {data: greenhouses, isLoading: isLoadingGreenhouse} =
     useGetMyGreenhouses();
-  const {data: areas = []} = useGetGreenhouseAreas(selectedGreenhouseId);
-  const {data: devices = [], isLoading: isLoadingDevices} =
+  const {data: areas} = useGetGreenhouseAreas(selectedGreenhouseId);
+  const {data: devices, isLoading: isLoadingDevices} =
     useGetGreenhouseDeviceByGreenhouse(selectedGreenhouseId);
+
+  const greenhouseList: GreenhousesType[] = (greenhouses as any)?.data || (Array.isArray(greenhouses) ? greenhouses : []);
+  const areaList: AreaType[] = (areas as any)?.data || (Array.isArray(areas) ? areas : []);
+  const deviceList: DeviceType[] = (devices as any)?.data || (Array.isArray(devices) ? devices : []);
 
   const createMutation = useCreateDevice();
   const updateMutation = useUpdateDevice();
   const deleteMutation = useDeleteDevice();
 
   useEffect(() => {
-    if (greenhouses.data?.length > 0 && selectedGreenhouseId === "") {
-      setSelectedGreenhouseId(greenhouses.data[0].id);
+    if (greenhouseList.length > 0 && selectedGreenhouseId === "") {
+      setSelectedGreenhouseId(greenhouseList[0].id);
     }
-  }, [greenhouses, selectedGreenhouseId]);
+  }, [greenhouseList, selectedGreenhouseId]);
 
   // Efek Kamera Scan QR di Custom Add Modal
   useEffect(() => {
@@ -200,6 +204,8 @@ export default function DevicePage() {
       {
         id: data.uuid,
         idGreenhouse: selectedGreenhouseId,
+        name: "",
+        macAddress: "",
         ...data,
       },
       {
@@ -216,7 +222,13 @@ export default function DevicePage() {
   const onEditSubmit = (data: DeviceFormType) => {
     if (!selectedData) return;
     updateMutation.mutate(
-      {id: selectedData.id, idGreenhouse: selectedGreenhouseId, ...data},
+      {
+        id: selectedData.id,
+        idGreenhouse: selectedGreenhouseId,
+        name: data.name,
+        macAddress: "",
+        areaId: data.areaId,
+      },
       {
         onSuccess: (res: any) => {
           toast.success(res.message || "Device updated successfully");
@@ -242,7 +254,7 @@ export default function DevicePage() {
 
   // Generator Opsi Dropdown Area untuk Keperluan Edit Modal
   const areasConfig =
-    areas.data?.map((area: any) => ({
+    areaList.map((area: any) => ({
       label: area.name,
       value: area.id,
     })) || [];
@@ -283,11 +295,13 @@ export default function DevicePage() {
       cell: (row) => (
         <div>
           <p>
-            {new Date(row.createdAt).toLocaleDateString("id-ID", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}
+            {row.createdAt
+              ? new Date(row.createdAt).toLocaleDateString("id-ID", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })
+              : "-"}
           </p>
         </div>
       ),
@@ -297,11 +311,13 @@ export default function DevicePage() {
       cell: (row) => (
         <div>
           <p>
-            {new Date(row.updatedAt).toLocaleDateString("id-ID", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}
+            {row.updatedAt
+              ? new Date(row.updatedAt).toLocaleDateString("id-ID", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })
+              : "-"}
           </p>
         </div>
       ),
@@ -360,7 +376,7 @@ export default function DevicePage() {
             disabled={isLoadingGreenhouse}
             className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-green-500 shadow-sm"
           >
-            {greenhouses.data?.map((gh: GreenhousesType) => (
+            {greenhouseList.map((gh: GreenhousesType) => (
               <option key={gh.id} value={gh.id}>
                 {gh.name}
               </option>
@@ -381,7 +397,7 @@ export default function DevicePage() {
       >
         <Table
           columns={columns}
-          data={devices.data || []}
+          data={deviceList}
           isLoading={isLoadingDevices}
           emptyMessage="No devices found"
         />

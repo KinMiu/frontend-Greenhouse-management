@@ -49,7 +49,7 @@ export default function DevicePage() {
     error: errorDevices,
   } = useGetAllDevice();
 
-  console.log(devices);
+  const deviceList = (devices as any)?.data || (Array.isArray(devices) ? devices : []);
 
   const createMutation = useCreateDevice();
   const updateMutation = useUpdateDevice();
@@ -68,16 +68,14 @@ export default function DevicePage() {
     setSelectedData({
       id: row.id,
       name: row.name,
-      type: row.type,
       macAddress: row.macAddress,
-      status: "OFFLINE",
+      areaId: row.areaId,
     });
     setIsModalOpen(true);
   };
 
   const handleSubmitForm = (data: DeviceFormType) => {
     if (selectedData) {
-      console.log(selectedData);
       updateMutation.mutate(
         {id: selectedData.id, ...data},
         {
@@ -161,12 +159,14 @@ export default function DevicePage() {
     {
       header: "Created At",
       cell: (row) => {
-        const date = new Date(row.createdAt);
-        const tanggal = date.toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
+        const date = row.createdAt ? new Date(row.createdAt) : null;
+        const tanggal = date
+          ? date.toLocaleDateString("id-ID", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          : "-";
         return (
           <div className="text-gray-600 text-sm">
             <p>{tanggal}</p>
@@ -177,12 +177,14 @@ export default function DevicePage() {
     {
       header: "Updated At",
       cell: (row) => {
-        const date = new Date(row.updatedAt);
-        const tanggal = date.toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
+        const date = row.updatedAt ? new Date(row.updatedAt) : null;
+        const tanggal = date
+          ? date.toLocaleDateString("id-ID", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          : "-";
         return (
           <div className="text-gray-600 text-sm">
             <p>{tanggal}</p>
@@ -208,7 +210,7 @@ export default function DevicePage() {
           <Button
             onClick={() => handleOpenEdit(row)}
             variant="ghost"
-            className="p-2 text-amber-600 hover:bg-amber-50" // Ganti warna dikit biar beda sama icon Eye
+            className="p-2 text-amber-600 hover:bg-amber-50"
             title="Edit Device"
           >
             <Edit className="w-4 h-4" />
@@ -232,14 +234,12 @@ export default function DevicePage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          {/* Teks diperbaiki */}
           <h1 className="text-2xl font-bold text-gray-800">
             Device Management
           </h1>
           <p className="text-gray-500">Manage your greenhouse devices</p>
         </div>
 
-        {/* Tombol ADD ditekuk untuk membuka Modal, bukan pindah halaman */}
         <Button variant="primary" onClick={handleOpenAdd}>
           + Add New Device
         </Button>
@@ -251,9 +251,9 @@ export default function DevicePage() {
       >
         <Table
           columns={columns}
-          data={devices.data || []}
+          data={deviceList}
           isLoading={isLoadingDevices}
-          emptyMessage="No users found"
+          emptyMessage="No devices found"
         />
       </motion.div>
 
@@ -267,17 +267,13 @@ export default function DevicePage() {
           selectedData
             ? {
                 name: selectedData.name,
-                type: selectedData.type,
                 macAddress: selectedData.macAddress,
-                status: selectedData.status,
                 areaId: selectedData.areaId,
               }
             : {
                 name: "",
-                type: "SENSOR",
                 macAddress: "",
-                status: "OFFLINE",
-                areaId: "",
+                areaId: null,
               }
         }
         onSubmit={handleSubmitForm}
