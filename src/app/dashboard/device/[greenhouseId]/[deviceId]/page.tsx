@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Calendar,
   TrendingUp,
   TrendingDown,
   BarChart3,
@@ -22,6 +21,13 @@ import {
   FileText,
   Filter,
   CheckCircle2,
+  Copy,
+  Check,
+  RefreshCw,
+  Sparkles,
+  Gauge,
+  Sliders,
+  ChevronDown,
 } from "lucide-react";
 import Button from "@/src/components/ui/button";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
@@ -60,23 +66,33 @@ export default function DeviceDetailPage() {
   // -- Main Chart States --
   const [activeSensorId, setActiveSensorId] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("24h");
+  const [isCopiedMac, setIsCopiedMac] = useState(false);
 
   // -- Pagination States --
   const [mainTablePage, setMainTablePage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 6;
 
-  // --- DATA FETCHING (Profil Device Utama) ---
+  // --- DATA FETCHING (Device Details) ---
   const {
     data: response,
     isLoading,
     isError,
+    refetch,
+    isRefetching,
   } = useGetGreenhouseDeviceDetails(deviceId);
   const device: any = (response as any)?.data || response;
 
-  // Filter only SENSOR components
+  // Filter SENSOR components
   const sensorComponents: any[] = useMemo(() => {
     return (device?.components || []).filter(
       (comp: any) => comp.type === "SENSOR",
+    );
+  }, [device?.components]);
+
+  // Filter ACTUATOR components
+  const actuatorComponents: any[] = useMemo(() => {
+    return (device?.components || []).filter(
+      (comp: any) => comp.type === "ACTUATOR",
     );
   }, [device?.components]);
 
@@ -96,13 +112,68 @@ export default function DeviceDetailPage() {
     );
   }, [sensorComponents, activeSensorId]);
 
+  // Determine dynamic color theme based on sensor type/category
+  const activeTheme = useMemo(() => {
+    const text = `${activeSensor?.name || ""} ${activeSensor?.category || ""}`.toLowerCase();
+    if (text.includes("temp") || text.includes("suhu") || text.includes("panas")) {
+      return {
+        stroke: "#f43f5e",
+        fill: "#f43f5e",
+        badgeBg: "bg-rose-50",
+        badgeText: "text-rose-600",
+        border: "border-rose-200",
+        ring: "ring-rose-500/20",
+        activeTab: "bg-rose-500 text-white shadow-rose-500/25",
+        gradId: "tempGrad",
+        icon: TrendingUp,
+      };
+    }
+    if (text.includes("hum") || text.includes("lembab") || text.includes("air") || text.includes("water")) {
+      return {
+        stroke: "#0284c7",
+        fill: "#0ea5e9",
+        badgeBg: "bg-sky-50",
+        badgeText: "text-sky-600",
+        border: "border-sky-200",
+        ring: "ring-sky-500/20",
+        activeTab: "bg-sky-500 text-white shadow-sky-500/25",
+        gradId: "humGrad",
+        icon: Activity,
+      };
+    }
+    if (text.includes("ph") || text.includes("ec") || text.includes("tds") || text.includes("nutrisi")) {
+      return {
+        stroke: "#7c3aed",
+        fill: "#8b5cf6",
+        badgeBg: "bg-purple-50",
+        badgeText: "text-purple-600",
+        border: "border-purple-200",
+        ring: "ring-purple-500/20",
+        activeTab: "bg-purple-500 text-white shadow-purple-500/25",
+        gradId: "phGrad",
+        icon: Gauge,
+      };
+    }
+    return {
+      stroke: "#059669",
+      fill: "#10b981",
+      badgeBg: "bg-emerald-50",
+      badgeText: "text-emerald-600",
+      border: "border-emerald-200",
+      ring: "ring-emerald-500/20",
+      activeTab: "bg-emerald-500 text-white shadow-emerald-500/25",
+      gradId: "sensorGrad",
+      icon: Activity,
+    };
+  }, [activeSensor]);
+
   // --- DATA FETCHING: Historical Data for Main Chart ---
   const {data: chartHistoryResponse, isLoading: isLoadingChart} =
     useGetGreenhouseDeviceComponentSensor(
       greenhouseId,
       activeSensor?.id,
       1,
-      150, // Fetch ample historical data points for chart
+      150,
       selectedPeriod,
     );
 
@@ -195,17 +266,25 @@ export default function DeviceDetailPage() {
     setHistoryLogs(data);
   };
 
+  const handleCopyMac = () => {
+    if (device?.macAddress) {
+      navigator.clipboard.writeText(device.macAddress);
+      setIsCopiedMac(true);
+      setTimeout(() => setIsCopiedMac(false), 2000);
+    }
+  };
+
   // --- COLUMNS CONFIG (Main Table Components) ---
   const columns: TableColumn<any>[] = [
     {
-      header: "Component",
+      header: "Component Name",
       cell: (row) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5 py-1">
           <div
-            className={`p-2 rounded-lg ${
+            className={`p-2.5 rounded-xl transition-all ${
               row.type === "SENSOR"
-                ? "bg-blue-50 text-blue-600"
-                : "bg-orange-50 text-orange-600"
+                ? "bg-blue-50/80 text-blue-600 ring-1 ring-blue-100"
+                : "bg-amber-50/80 text-amber-600 ring-1 ring-amber-100"
             }`}
           >
             {row.type === "SENSOR" ? (
@@ -215,32 +294,42 @@ export default function DeviceDetailPage() {
             )}
           </div>
           <div>
-            <p className="font-bold text-gray-800 leading-none">{row.name}</p>
-            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-1">
-              {row.type}
+            <p className="font-bold text-gray-900 text-sm tracking-tight">
+              {row.name}
             </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span
+                className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                  row.type === "SENSOR"
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {row.type}
+              </span>
+              {row.category && (
+                <span className="text-[10px] text-gray-400 font-medium">
+                  • {row.category}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       ),
     },
     {
-      header: "Category",
-      accessor: "category",
-      cell: (row) => row.category || "-",
-    },
-    {
-      header: "Unit",
+      header: "Unit / Metric",
       cell: (row) => (
-        <span className="text-[10px] text-gray-400 font-bold uppercase">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-gray-100/70 text-gray-700 border border-gray-200/50">
           {row.unit || "-"}
         </span>
       ),
     },
     {
-      header: "Pin/Key",
+      header: "Hardware Pin",
       cell: (row) => (
-        <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">
-          {row.pin || "Auto"}
+        <code className="text-xs font-mono font-bold bg-slate-900 text-emerald-400 px-2.5 py-1 rounded-lg shadow-inner">
+          {row.pin || "AUTO"}
         </code>
       ),
     },
@@ -250,36 +339,34 @@ export default function DeviceDetailPage() {
       cell: (row) => (
         <div className="flex items-center justify-end gap-2">
           {row.type === "SENSOR" ? (
-            <div className="flex items-center gap-1.5">
-              <Button
+            <div className="flex items-center gap-2">
+              <button
                 onClick={() => {
                   setActiveSensorId(row.id);
                   const el = document.getElementById("sensor-chart-section");
                   if (el) el.scrollIntoView({behavior: "smooth"});
                 }}
-                variant="ghost"
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 active:scale-95 ${
                   activeSensorId === row.id
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "text-gray-600 border-gray-200 hover:bg-gray-50"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
                 }`}
-                title="Tampilkan di Grafik"
               >
-                <BarChart3 className="w-3.5 h-3.5 mr-1" />
+                <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
                 Grafik
-              </Button>
-              <Button
+              </button>
+              <button
                 onClick={() => handleOpenLogModal(row)}
-                variant="ghost"
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-xs"
-                title="Lihat Riwayat Log Tabel"
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition-all flex items-center gap-1.5 shadow-xs active:scale-95"
               >
-                <FileText className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                <FileText className="w-3.5 h-3.5 text-emerald-400" />
                 Riwayat Log
-              </Button>
+              </button>
             </div>
           ) : (
-            <span className="text-xs text-gray-400">-</span>
+            <span className="text-xs text-gray-400 font-medium italic">
+              Actuator Unit
+            </span>
           )}
         </div>
       ),
@@ -289,17 +376,19 @@ export default function DeviceDetailPage() {
   // --- COLUMNS CONFIG (History Logs Modal) ---
   const historyColumns: TableColumn<any>[] = [
     {
-      header: "Status",
+      header: "Status Node",
       cell: (row) => (
         <div className="flex items-center gap-2">
           <div
-            className={`h-2 w-2 rounded-full ${
-              row.state === "ONLINE" ? "bg-green-500" : "bg-red-500"
+            className={`h-2.5 w-2.5 rounded-full ${
+              row.state === "ONLINE"
+                ? "bg-emerald-500 shadow-sm shadow-emerald-500/50"
+                : "bg-rose-500 shadow-sm shadow-rose-500/50"
             }`}
           />
           <span
-            className={`text-xs font-bold ${
-              row.state === "ONLINE" ? "text-green-600" : "text-red-600"
+            className={`text-xs font-extrabold ${
+              row.state === "ONLINE" ? "text-emerald-700" : "text-rose-600"
             }`}
           >
             {row.state}
@@ -308,13 +397,13 @@ export default function DeviceDetailPage() {
       ),
     },
     {
-      header: "Timestamp",
+      header: "Waktu Terdeteksi",
       cell: (row) => {
         if (!row.createAt) return "-";
         const date = new Date(row.createAt);
         return (
           <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-gray-700 font-mono">
+            <span className="text-xs font-bold text-gray-900 font-mono">
               {date
                 .toLocaleTimeString("id-ID", {
                   hour: "2-digit",
@@ -324,7 +413,7 @@ export default function DeviceDetailPage() {
                 })
                 .replace(/\./g, ":")}
             </span>
-            <span className="text-[9px] text-gray-400 uppercase">
+            <span className="text-[10px] text-gray-400 font-medium">
               {date.toLocaleDateString("id-ID", {
                 day: "2-digit",
                 month: "short",
@@ -336,202 +425,277 @@ export default function DeviceDetailPage() {
       },
     },
     {
-      header: "Remark",
+      header: "Keterangan",
       cell: (row) => (
-        <span className="text-[10px] text-gray-400 italic">
+        <span className="text-xs text-gray-500 italic">
           {row.reason || "-"}
         </span>
       ),
     },
   ];
 
-  if (isLoading)
+  if (isLoading) {
     return (
-      <div className="p-10 text-center animate-pulse text-gray-400">
-        Loading Device Details...
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center animate-pulse">
+          <Activity className="w-6 h-6 text-emerald-600 animate-spin" />
+        </div>
+        <p className="text-sm font-bold text-gray-600 animate-pulse">
+          Memuat detail konfigurasi node...
+        </p>
       </div>
     );
-  if (isError || !device)
+  }
+
+  if (isError || !device) {
     return (
-      <div className="p-10 text-center text-red-500 border border-red-200 rounded-xl bg-red-50">
-        Error: Device profile not found.
+      <div className="p-8 max-w-2xl mx-auto my-12 text-center bg-rose-50/70 border border-rose-200 rounded-3xl space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <X className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-900">
+          Node Device Tidak Ditemukan
+        </h2>
+        <p className="text-xs text-gray-500">
+          Perangkat ini mungkin telah dihapus atau Anda tidak memiliki hak akses ke greenhouse ini.
+        </p>
+        <Button
+          onClick={() => router.push("/dashboard/device")}
+          variant="primary"
+          className="mt-2 rounded-xl"
+        >
+          Kembali ke Daftar Perangkat
+        </Button>
       </div>
     );
+  }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* 1. HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            className="p-2 border border-gray-200 bg-white shadow-sm hover:bg-gray-50 rounded-xl"
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* 1. TOP COMMAND BAR & BREADCRUMB */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-gray-100 shadow-sm sticky top-0 z-20">
+        <div className="flex items-center gap-3.5">
+          <button
             onClick={() => router.push(`/dashboard/device`)}
+            className="p-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-2xl border border-gray-200/60 transition-all active:scale-95 shadow-xs"
+            title="Kembali"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Button>
+            <ArrowLeft className="w-4 h-4" />
+          </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                IoT Node
+              </span>
+              <span className="text-xs text-gray-400 font-medium">/</span>
+              <span className="text-xs font-semibold text-gray-500">
+                {device.area?.name || "Global Area"}
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight mt-0.5">
               {device.name}
             </h1>
-            <p className="text-gray-500 text-sm">
-              Hardware Configuration & Sensor Analytics Node
-            </p>
           </div>
         </div>
 
-        <div className="flex flex-row justify-center items-center gap-3">
-          <div className="px-3 py-1.5 rounded-full font-bold text-[11px] flex items-center gap-2 border shadow-inner transition-all bg-emerald-50 text-emerald-600 border-emerald-200">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            NODE ONLINE
-          </div>
-
-          <Button
-            onClick={() => handleOpenedHistory(device.statusLogs, true)}
-            variant="danger"
-            className="p-2.5 rounded-xl shadow-sm"
-            title="View Connection Logs"
+        {/* Action Controls */}
+        <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          <button
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            className="p-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-2xl shadow-xs transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+            title="Muat Ulang Data"
           >
-            <History className="w-5 h-5" />
-          </Button>
+            <RefreshCw
+              className={`w-4 h-4 text-gray-500 ${
+                isRefetching ? "animate-spin text-emerald-600" : ""
+              }`}
+            />
+            <span className="hidden md:inline">Refresh</span>
+          </button>
+
+          <button
+            onClick={() => handleOpenedHistory(device.statusLogs, true)}
+            className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-2xl font-bold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-2"
+            title="Riwayat Koneksi Hidup/Mati"
+          >
+            <History className="w-4 h-4 text-rose-600" />
+            <span>Connection Logs</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. DEVICE INFO GRID */}
+      {/* 2. HERO NODE OVERVIEW CARD */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <InfoCard
-          label="Hardware MAC"
-          val={device.macAddress}
-          icon={Wifi}
-          color="text-blue-500 bg-blue-50"
-        />
-        <InfoCard
-          label="Location Area"
-          val={device.area?.name || "Global Node"}
-          icon={MapPin}
-          color="text-orange-500 bg-orange-50"
-        />
-
-        <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm hover:border-gray-200 transition-colors">
+        {/* Hardware MAC */}
+        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-all">
           <div className="flex items-center gap-4">
-            <div className="p-2.5 rounded-lg bg-purple-50 text-purple-500">
+            <div className="p-3.5 rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100 group-hover:scale-105 transition-transform">
+              <Wifi className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider">
+                MAC Address
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-sm font-black text-gray-900 font-mono tracking-tight">
+                  {device.macAddress}
+                </p>
+                <button
+                  onClick={handleCopyMac}
+                  className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-700 transition-colors"
+                  title="Salin MAC Address"
+                >
+                  {isCopiedMac ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Location Area */}
+        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-amber-200 transition-all">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-100 group-hover:scale-105 transition-transform">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider">
+                Penempatan Area
+              </p>
+              <p className="text-sm font-bold text-gray-900 mt-0.5">
+                {device.area?.name || "Global / Unassigned"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Last Seen & Heartbeat */}
+        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-purple-200 transition-all">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-purple-50 text-purple-600 ring-1 ring-purple-100 group-hover:scale-105 transition-transform">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                Last Seen
+              <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider">
+                Terakhir Terlihat
               </p>
-              <p className="text-xs font-bold font-mono text-gray-700">
+              <p className="text-sm font-bold text-gray-900 font-mono mt-0.5">
                 {device.lastSeen
                   ? new Date(device.lastSeen).toLocaleTimeString("id-ID", {
                       hour: "2-digit",
                       minute: "2-digit",
                       second: "2-digit",
                     })
-                  : "NEVER"}
+                  : "BELUM PERNAH"}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. HISTORICAL SENSOR CHARTS & ANALYTICS SECTION (MAIN PAGE) */}
-      <div id="sensor-chart-section" className="space-y-4 pt-2">
+      {/* 3. SENSOR HISTORICAL TELEMETRY STUDIO (MAIN PAGE SECTION) */}
+      <div id="sensor-chart-section" className="space-y-4 pt-1">
+        {/* Section Title */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
           <div>
-            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <h3 className="text-lg font-black text-gray-900 flex items-center gap-2 tracking-tight">
               <BarChart3 className="w-5 h-5 text-emerald-600" />
-              Sensor Historical Analytics
+              Sensor Telemetry Studio
             </h3>
             <p className="text-xs text-gray-500">
-              Grafik riwayat telemetri sensor tersimpan berdasarkan periode waktu
+              Analisis grafik riwayat data sensor tersimpan dari database
             </p>
           </div>
 
           {activeSensor && (
-            <Button
+            <button
               onClick={() => handleOpenLogModal(activeSensor)}
-              variant="ghost"
-              className="self-start sm:self-auto px-3.5 py-1.5 text-xs font-bold bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl shadow-xs"
+              className="self-start sm:self-auto px-4 py-2 text-xs font-bold bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 rounded-2xl shadow-xs transition-all flex items-center gap-2 active:scale-95"
             >
-              <FileText className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-              Buka Tabel Log Riwayat
-            </Button>
+              <FileText className="w-4 h-4 text-emerald-600" />
+              <span>Buka Tabel Log Riwayat</span>
+            </button>
           )}
         </div>
 
-        {/* Sensor Component Switcher Tabs */}
         {sensorComponents.length > 0 ? (
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-            {/* Tabs for multiple sensor components */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-5 sm:p-7 space-y-6">
+            {/* SENSOR SWITCHER RIBBON / TABS */}
             {sensorComponents.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-gray-100">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5" /> Sensor:
-                </span>
-                {sensorComponents.map((comp) => {
-                  const isActive = comp.id === activeSensor?.id;
-                  return (
-                    <button
-                      key={comp.id}
-                      onClick={() => setActiveSensorId(comp.id)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-                        isActive
-                          ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
-                          : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
-                      }`}
-                    >
-                      <Activity
-                        className={`w-3.5 h-3.5 ${
-                          isActive ? "text-white" : "text-gray-400"
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-gray-400 tracking-wider">
+                  <Layers className="w-3.5 h-3.5 text-gray-400" />
+                  Pilih Komponen Sensor:
+                </div>
+                <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+                  {sensorComponents.map((comp) => {
+                    const isActive = comp.id === activeSensor?.id;
+                    return (
+                      <button
+                        key={comp.id}
+                        onClick={() => setActiveSensorId(comp.id)}
+                        className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2.5 active:scale-95 ${
+                          isActive
+                            ? `${activeTheme.activeTab} shadow-lg ring-2 ${activeTheme.ring}`
+                            : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200/60"
                         }`}
-                      />
-                      {comp.name}
-                      {comp.unit && (
-                        <span
-                          className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                            isActive
-                              ? "bg-emerald-600 text-emerald-100"
-                              : "bg-gray-200/70 text-gray-500"
+                      >
+                        <Activity
+                          className={`w-4 h-4 ${
+                            isActive ? "text-white" : "text-gray-400"
                           }`}
-                        >
-                          {comp.unit}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                        />
+                        <span>{comp.name}</span>
+                        {comp.unit && (
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-md font-mono font-bold ${
+                              isActive
+                                ? "bg-black/20 text-white"
+                                : "bg-gray-200 text-gray-600"
+                            }`}
+                          >
+                            {comp.unit}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
-            {/* Active Sensor Overview & Filters Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
-                    <Activity className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-gray-900 leading-tight">
-                      {activeSensor?.name || "Sensor Component"}
+            {/* CHART CANVAS HEADER & CONTROLS */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 border-t border-gray-100">
+              <div className="flex items-center gap-3.5">
+                <div
+                  className={`p-3 rounded-2xl ${activeTheme.badgeBg} ${activeTheme.badgeText} border ${activeTheme.border}`}
+                >
+                  <activeTheme.icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                      {activeSensor?.name}
                     </h4>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                        {activeSensor?.category || "Sensor"}
-                      </span>
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase">
-                        Satuan: {activeSensor?.unit || "-"}
-                      </span>
-                    </div>
+                    <span
+                      className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${activeTheme.badgeBg} ${activeTheme.badgeText}`}
+                    >
+                      {activeSensor?.category || "Sensor"}
+                    </span>
                   </div>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">
+                    Hardware Key ID: <span className="font-mono text-gray-600">{activeSensor?.id}</span>
+                  </p>
                 </div>
               </div>
 
-              {/* Period Filter Buttons */}
-              <div className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-2xl border border-gray-100 self-start md:self-auto">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 flex items-center gap-1">
-                  <Filter className="w-3 h-3" /> Periode:
-                </span>
+              {/* Period Selector Segmented Control */}
+              <div className="flex items-center gap-1 bg-gray-100/80 p-1.5 rounded-2xl border border-gray-200/50 self-start md:self-auto">
                 {(
                   [
                     {key: "24h", label: "24 Jam"},
@@ -539,25 +703,28 @@ export default function DeviceDetailPage() {
                     {key: "30d", label: "30 Hari (Bulanan)"},
                     {key: "all", label: "Semua"},
                   ] as {key: PeriodType; label: string}[]
-                ).map((period) => (
-                  <button
-                    key={period.key}
-                    onClick={() => setSelectedPeriod(period.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      selectedPeriod === period.key
-                        ? "bg-white text-emerald-700 shadow-sm border border-emerald-100"
-                        : "text-gray-500 hover:text-gray-800 hover:bg-gray-100/60"
-                    }`}
-                  >
-                    {period.label}
-                  </button>
-                ))}
+                ).map((period) => {
+                  const isSelected = selectedPeriod === period.key;
+                  return (
+                    <button
+                      key={period.key}
+                      onClick={() => setSelectedPeriod(period.key)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        isSelected
+                          ? "bg-white text-gray-900 shadow-sm font-black"
+                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+                      }`}
+                    >
+                      {period.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Quick KPI Stat Pill Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatPill
+            {/* KPI STAT HIGHLIGHTS */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <StatBox
                 label="Nilai Terkini"
                 val={
                   chartStats.latest !== null
@@ -568,10 +735,11 @@ export default function DeviceDetailPage() {
                       )} ${activeSensor?.unit || ""}`
                     : "-"
                 }
+                sub="Telemetri Terakhir"
                 icon={TrendingUp}
-                color="text-emerald-600 bg-emerald-50"
+                color="text-emerald-600 bg-emerald-50 border-emerald-100"
               />
-              <StatPill
+              <StatBox
                 label="Rata-rata (Avg)"
                 val={
                   chartStats.avg !== null
@@ -582,11 +750,12 @@ export default function DeviceDetailPage() {
                       )} ${activeSensor?.unit || ""}`
                     : "-"
                 }
+                sub="Dalam Periode Terpilih"
                 icon={Activity}
-                color="text-blue-600 bg-blue-50"
+                color="text-blue-600 bg-blue-50 border-blue-100"
               />
-              <StatPill
-                label="Minimum"
+              <StatBox
+                label="Titik Minimum"
                 val={
                   chartStats.min !== null
                     ? `${chartStats.min.toFixed(
@@ -596,11 +765,12 @@ export default function DeviceDetailPage() {
                       )} ${activeSensor?.unit || ""}`
                     : "-"
                 }
+                sub="Nilai Terendah"
                 icon={TrendingDown}
-                color="text-cyan-600 bg-cyan-50"
+                color="text-cyan-600 bg-cyan-50 border-cyan-100"
               />
-              <StatPill
-                label="Maksimum"
+              <StatBox
+                label="Titik Maksimum"
                 val={
                   chartStats.max !== null
                     ? `${chartStats.max.toFixed(
@@ -610,22 +780,23 @@ export default function DeviceDetailPage() {
                       )} ${activeSensor?.unit || ""}`
                     : "-"
                 }
+                sub="Nilai Tertinggi"
                 icon={TrendingUp}
-                color="text-rose-600 bg-rose-50"
+                color="text-rose-600 bg-rose-50 border-rose-100"
               />
             </div>
 
-            {/* Recharts Historical Chart */}
-            <div className="bg-gray-50/50 border border-gray-100 rounded-3xl p-4 sm:p-6 min-h-[340px] flex flex-col justify-center">
+            {/* MAIN CHART CANVAS */}
+            <div className="bg-slate-50/60 border border-gray-100 rounded-3xl p-4 sm:p-6 min-h-[360px] flex flex-col justify-center">
               {isLoadingChart ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3 animate-pulse">
-                  <Activity className="w-8 h-8 text-emerald-400 animate-spin" />
-                  <p className="text-xs font-semibold">
-                    Memuat riwayat telemetri dari database...
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+                  <Activity className="w-8 h-8 text-emerald-500 animate-spin" />
+                  <p className="text-xs font-bold text-gray-500">
+                    Memuat data historis telemetri dari database...
                   </p>
                 </div>
               ) : chartPoints.length > 0 ? (
-                <div className="h-[320px] sm:h-[360px] w-full">
+                <div className="h-[320px] sm:h-[380px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                       data={chartPoints}
@@ -633,7 +804,7 @@ export default function DeviceDetailPage() {
                     >
                       <defs>
                         <linearGradient
-                          id="sensorAreaGrad"
+                          id={activeTheme.gradId}
                           x1="0"
                           y1="0"
                           x2="0"
@@ -641,12 +812,12 @@ export default function DeviceDetailPage() {
                         >
                           <stop
                             offset="5%"
-                            stopColor="#10b981"
+                            stopColor={activeTheme.fill}
                             stopOpacity={0.35}
                           />
                           <stop
                             offset="95%"
-                            stopColor="#10b981"
+                            stopColor={activeTheme.fill}
                             stopOpacity={0.0}
                           />
                         </linearGradient>
@@ -654,21 +825,21 @@ export default function DeviceDetailPage() {
                       <CartesianGrid
                         strokeDasharray="3 3"
                         vertical={false}
-                        stroke="#e5e7eb"
+                        stroke="#e2e8f0"
                       />
                       <XAxis
                         dataKey="time"
                         fontSize={10}
                         tickLine={false}
                         axisLine={false}
-                        stroke="#9ca3af"
+                        stroke="#94a3b8"
                         dy={8}
                       />
                       <YAxis
                         fontSize={10}
                         tickLine={false}
                         axisLine={false}
-                        stroke="#9ca3af"
+                        stroke="#94a3b8"
                         dx={-4}
                         unit={activeSensor?.unit ? ` ${activeSensor.unit}` : ""}
                       />
@@ -677,13 +848,13 @@ export default function DeviceDetailPage() {
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
                             return (
-                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl border border-gray-800 text-xs space-y-1">
-                                <p className="text-[10px] text-gray-400 font-mono">
+                              <div className="bg-slate-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl shadow-xl border border-slate-800 text-xs space-y-1">
+                                <p className="text-[10px] text-slate-400 font-mono">
                                   {data.time}
                                 </p>
-                                <p className="font-bold text-sm text-emerald-400">
+                                <p className="font-black text-base text-emerald-400 font-mono">
                                   {data.value}{" "}
-                                  <span className="text-xs text-gray-300">
+                                  <span className="text-xs font-sans text-slate-300">
                                     {activeSensor?.unit}
                                   </span>
                                 </p>
@@ -696,101 +867,106 @@ export default function DeviceDetailPage() {
                       <Area
                         type="monotone"
                         dataKey="value"
-                        stroke="#059669"
-                        strokeWidth={2.5}
+                        stroke={activeTheme.stroke}
+                        strokeWidth={3}
                         fillOpacity={1}
-                        fill="url(#sensorAreaGrad)"
+                        fill={`url(#${activeTheme.gradId})`}
                         dot={{
                           r: 3,
-                          fill: "#059669",
+                          fill: activeTheme.stroke,
                           strokeWidth: 1.5,
                           stroke: "#fff",
                         }}
                         activeDot={{
                           r: 6,
                           stroke: "#fff",
-                          strokeWidth: 2,
-                          fill: "#10b981",
+                          strokeWidth: 2.5,
+                          fill: activeTheme.stroke,
                         }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2 border border-dashed border-gray-200 rounded-2xl bg-white">
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2 border border-dashed border-gray-200 rounded-3xl bg-white">
                   <BarChart3 className="w-10 h-10 text-gray-300" />
-                  <p className="text-sm font-semibold text-gray-600">
-                    Belum ada data riwayat untuk periode ini
+                  <p className="text-sm font-bold text-gray-700">
+                    Belum Ada Data Riwayat Telemetri
                   </p>
                   <p className="text-xs text-gray-400 text-center max-w-sm">
-                    Data sensor akan otomatis terisi saat ESP32 mengirim
-                    telemetri ke sistem.
+                    Sensor ini belum mencatat data pada periode {selectedPeriod}. Data akan otomatis terupdate saat ESP32 aktif mengirim log.
                   </p>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="bg-white p-8 rounded-3xl border border-gray-100 text-center text-gray-400 space-y-2 shadow-sm">
+          <div className="bg-white p-10 rounded-3xl border border-gray-100 text-center text-gray-400 space-y-2 shadow-sm">
             <Cpu className="w-10 h-10 text-gray-300 mx-auto" />
-            <p className="font-bold text-gray-700">
-              Tidak Ada Komponen Sensor Terpasang
+            <p className="font-bold text-gray-800 text-base">
+              Tidak Ada Komponen Sensor
             </p>
             <p className="text-xs text-gray-400">
-              Tambahkan komponen bertipe SENSOR pada node ini untuk melihat grafik
-              riwayat.
+              Perangkat ini belum memiliki komponen dengan tipe SENSOR.
             </p>
           </div>
         )}
       </div>
 
-      {/* 4. HARDWARE COMPONENTS TABLE */}
-      <motion.div
-        initial={{opacity: 0, y: 20}}
-        animate={{opacity: 1, y: 0}}
-        transition={{duration: 0.4}}
-        className="space-y-4 pt-2"
-      >
+      {/* 4. ATTACHED HARDWARE COMPONENTS TABLE */}
+      <div className="space-y-4 pt-2">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-emerald-600" /> Attached Hardware
-            Components
-          </h3>
+          <div>
+            <h3 className="text-lg font-black text-gray-900 flex items-center gap-2 tracking-tight">
+              <Cpu className="w-5 h-5 text-emerald-600" />
+              Attached Hardware Components
+            </h3>
+            <p className="text-xs text-gray-500">
+              Daftar seluruh sensor dan aktuator yang terkonfigurasi pada node ini
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-3 py-1 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
+              {sensorComponents.length} Sensor
+            </span>
+            <span className="text-xs font-bold px-3 py-1 bg-amber-50 text-amber-700 rounded-xl border border-amber-100">
+              {actuatorComponents.length} Actuator
+            </span>
+          </div>
         </div>
 
-        <div className="bg-white p-2 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <Table
             columns={columns}
             data={paginatedComponents}
-            emptyMessage="No components attached to this node."
+            emptyMessage="Belum ada komponen hardware yang terpasang pada node ini."
           />
         </div>
 
         {totalMainPages > 1 && (
-          <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider ml-2">
-              Showing {paginatedComponents.length} of{" "}
-              {device?.components?.length || 0} components
+          <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm">
+            <p className="text-xs text-gray-400 font-bold tracking-wider ml-2">
+              Menampilkan {paginatedComponents.length} dari{" "}
+              {device?.components?.length || 0} komponen
             </p>
             <div className="flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
+              <button
+                className="h-8 w-8 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-40"
                 disabled={mainTablePage === 1}
                 onClick={() => setMainTablePage((p) => p - 1)}
               >
                 <ChevronLeft className="w-4 h-4 text-gray-600" />
-              </Button>
+              </button>
               <div className="flex gap-1">
                 {Array.from({length: totalMainPages}, (_, i) => i + 1).map(
                   (pageNum) => (
                     <button
                       key={pageNum}
                       onClick={() => setMainTablePage(pageNum)}
-                      className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${
+                      className={`h-8 w-8 rounded-xl text-xs font-bold transition-all ${
                         mainTablePage === pageNum
-                          ? "bg-emerald-500 text-white shadow-md"
-                          : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                          ? "bg-gray-900 text-white shadow-sm font-black"
+                          : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                       }`}
                     >
                       {pageNum}
@@ -798,65 +974,65 @@ export default function DeviceDetailPage() {
                   ),
                 )}
               </div>
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0 border border-gray-200 bg-white rounded-lg hover:bg-gray-50"
+              <button
+                className="h-8 w-8 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center disabled:opacity-40"
                 disabled={mainTablePage >= totalMainPages}
                 onClick={() => setMainTablePage((p) => p + 1)}
               >
                 <ChevronRight className="w-4 h-4 text-gray-600" />
-              </Button>
+              </button>
             </div>
           </div>
         )}
-      </motion.div>
+      </div>
 
-      {/* --- 5. MODAL CONNECTION LOGS (STATUS LOGS) --- */}
+      {/* --- 5. MODAL CONNECTION LOGS (NODE PRESENCE / STATUS LOGS) --- */}
       <AnimatePresence>
         {isHistoryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
             <motion.div
-              initial={{opacity: 0, scale: 0.95}}
-              animate={{opacity: 1, scale: 1}}
-              exit={{opacity: 0, scale: 0.95}}
+              initial={{opacity: 0, scale: 0.95, y: 15}}
+              animate={{opacity: 1, scale: 1, y: 0}}
+              exit={{opacity: 0, scale: 0.95, y: 15}}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]"
             >
-              <div className="px-6 py-4 border-b flex items-center justify-between bg-white sticky top-0 z-10">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-purple-50 rounded-xl text-purple-600 border border-purple-100">
+              <div className="px-6 py-5 border-b flex items-center justify-between bg-white sticky top-0 z-10">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 bg-rose-50 rounded-2xl text-rose-600 border border-rose-100">
                     <History className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-800">
+                    <h3 className="font-extrabold text-lg text-gray-900 tracking-tight">
                       Node Connection Logs
                     </h3>
-                    <p className="text-[11px] text-gray-400">
-                      Riwayat koneksi hidup/mati node hardware
+                    <p className="text-xs text-gray-400">
+                      Riwayat deteksi waktu hidup (ONLINE) dan mati (OFFLINE)
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => handleOpenedHistory([], false)}
-                  className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-700 transition-colors"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="p-6 overflow-y-auto flex-grow custom-scrollbar">
-                <Table
-                  columns={historyColumns}
-                  data={historyLogs || []}
-                  emptyMessage="No connection logs recorded for this node."
-                />
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-xs">
+                  <Table
+                    columns={historyColumns}
+                    data={historyLogs || []}
+                    emptyMessage="Belum ada catatan riwayat koneksi untuk node ini."
+                  />
+                </div>
               </div>
               <div className="px-6 py-4 bg-gray-50/50 border-t flex justify-end">
-                <Button
-                  variant="primary"
+                <button
                   onClick={() => handleOpenedHistory([], false)}
-                  className="px-5 rounded-lg"
+                  className="px-6 py-2.5 bg-gray-900 text-white font-bold text-xs rounded-xl hover:bg-gray-800 transition-all active:scale-95 shadow-sm"
                 >
-                  Close Logs
-                </Button>
+                  Tutup Log
+                </button>
               </div>
             </motion.div>
           </div>
@@ -866,33 +1042,33 @@ export default function DeviceDetailPage() {
       {/* --- 6. MODAL SENSOR HISTORICAL LOG READINGS (POP-UP TABEL LOG) --- */}
       <AnimatePresence>
         {isLogModalOpen && modalSelectedComp && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
             <motion.div
-              initial={{opacity: 0, scale: 0.95, y: 20}}
+              initial={{opacity: 0, scale: 0.95, y: 15}}
               animate={{opacity: 1, scale: 1, y: 0}}
-              exit={{opacity: 0, scale: 0.95, y: 20}}
+              exit={{opacity: 0, scale: 0.95, y: 15}}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-100"
             >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="px-7 py-5 border-b flex items-center justify-between bg-white sticky top-0 z-10">
                 <div className="flex items-center gap-3.5">
                   <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 ring-1 ring-emerald-100">
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-lg text-gray-900 tracking-tight">
-                      Riwayat Log Sensor: {modalSelectedComp.name}
+                    <h3 className="font-black text-lg text-gray-900 tracking-tight">
+                      Riwayat Log: {modalSelectedComp.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-md font-bold uppercase">
+                      <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-bold uppercase">
                         {modalSelectedComp.category || "Sensor"}
                       </span>
                       <span className="text-[10px] text-emerald-600 font-bold uppercase">
                         • Satuan: {modalSelectedComp.unit || "N/A"}
                       </span>
                       {modalSensorPagination && (
-                        <span className="text-[10px] text-gray-400">
-                          (Total {modalSensorPagination.totalData} logs)
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          (Total {modalSensorPagination.totalData} entri)
                         </span>
                       )}
                     </div>
@@ -900,27 +1076,27 @@ export default function DeviceDetailPage() {
                 </div>
                 <button
                   onClick={() => setIsLogModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-700 transition-colors"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Modal Body: Data Table */}
-              <div className="p-6 overflow-y-auto flex-grow bg-gray-50/40 custom-scrollbar">
+              <div className="p-6 overflow-y-auto flex-grow bg-slate-50/40 custom-scrollbar">
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-xs">
                   <Table
                     isLoading={isLoadingModalSensor}
                     columns={[
                       {
-                        header: "Timestamp Waktu",
+                        header: "Waktu Telemetri",
                         cell: (r: any) => {
                           const date = new Date(
                             r.createdAt || r.deviceTime || Date.now(),
                           );
                           return (
-                            <div className="flex flex-col font-mono text-[11px]">
-                              <span className="font-bold text-gray-800">
+                            <div className="flex flex-col font-mono text-xs">
+                              <span className="font-bold text-gray-900">
                                 {date
                                   .toLocaleTimeString("id-ID", {
                                     hour: "2-digit",
@@ -930,7 +1106,7 @@ export default function DeviceDetailPage() {
                                   })
                                   .replace(/\./g, ":")}
                               </span>
-                              <span className="text-[9px] text-gray-400 uppercase font-sans">
+                              <span className="text-[10px] text-gray-400 font-sans">
                                 {date.toLocaleDateString("id-ID", {
                                   day: "2-digit",
                                   month: "short",
@@ -942,7 +1118,7 @@ export default function DeviceDetailPage() {
                         },
                       },
                       {
-                        header: "Nilai Terbaca",
+                        header: "Nilai Terukur",
                         cell: (r: any) => (
                           <span className="font-black text-emerald-600 text-sm tracking-tight font-mono">
                             {Number(r.value).toFixed(
@@ -959,7 +1135,7 @@ export default function DeviceDetailPage() {
                         ),
                       },
                       {
-                        header: "Status Data",
+                        header: "Kualitas Data",
                         cell: () => (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -973,7 +1149,7 @@ export default function DeviceDetailPage() {
                         ? modalSensorDataArray
                         : []
                     }
-                    emptyMessage="Belum ada data log telemetri yang tercatat untuk sensor ini."
+                    emptyMessage="Belum ada log telemetri yang tercatat untuk sensor ini."
                   />
                 </div>
               </div>
@@ -988,32 +1164,22 @@ export default function DeviceDetailPage() {
                       {modalSensorPagination.totalPages}
                     </span>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-xs ${
-                          modalSensorPage === 1
-                            ? "opacity-40"
-                            : "hover:bg-emerald-50"
-                        }`}
+                      <button
+                        className="h-8 w-8 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center disabled:opacity-40 shadow-xs"
                         disabled={modalSensorPage === 1}
                         onClick={() => setModalSensorPage((p) => p - 1)}
                       >
                         <ChevronLeft className="w-4 h-4 text-gray-600" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-xs ${
-                          modalSensorPage >= modalSensorPagination.totalPages
-                            ? "opacity-40"
-                            : "hover:bg-emerald-50"
-                        }`}
+                      </button>
+                      <button
+                        className="h-8 w-8 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 flex items-center justify-center disabled:opacity-40 shadow-xs"
                         disabled={
                           modalSensorPage >= modalSensorPagination.totalPages
                         }
                         onClick={() => setModalSensorPage((p) => p + 1)}
                       >
                         <ChevronRight className="w-4 h-4 text-gray-600" />
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -1022,7 +1188,7 @@ export default function DeviceDetailPage() {
 
                 <button
                   onClick={() => setIsLogModalOpen(false)}
-                  className="px-5 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-gray-800 transition-all active:scale-95 shadow-sm"
+                  className="px-6 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-gray-800 transition-all active:scale-95 shadow-sm"
                 >
                   Tutup
                 </button>
@@ -1035,39 +1201,22 @@ export default function DeviceDetailPage() {
   );
 }
 
-function InfoCard({label, val, icon: Icon, color}: any) {
+function StatBox({label, val, sub, icon: Icon, color}: any) {
   return (
-    <div className="bg-white p-4 rounded-xl border border-gray-100 flex items-center gap-4 shadow-sm hover:border-gray-200 transition-all duration-300 group">
-      <div
-        className={`p-3 rounded-xl bg-gray-50 ${color} group-hover:scale-105 transition-transform`}
-      >
+    <div
+      className={`p-4 rounded-2xl border bg-white flex items-center gap-3.5 shadow-xs transition-all hover:shadow-sm`}
+    >
+      <div className={`p-3 rounded-2xl ${color} border`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">
+        <p className="text-[10px] uppercase font-black text-gray-400 tracking-wider">
           {label}
         </p>
-        <p className="text-xs font-bold text-gray-700 font-mono mt-1 tracking-tight">
+        <p className="text-base font-black text-gray-900 font-mono tracking-tight mt-0.5">
           {val}
         </p>
-      </div>
-    </div>
-  );
-}
-
-function StatPill({label, val, icon: Icon, color}: any) {
-  return (
-    <div className="bg-white p-3.5 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-xs">
-      <div className={`p-2 rounded-xl ${color}`}>
-        <Icon className="w-4 h-4" />
-      </div>
-      <div>
-        <p className="text-[9px] uppercase font-extrabold text-gray-400 tracking-wider">
-          {label}
-        </p>
-        <p className="text-sm font-black text-gray-800 font-mono mt-0.5">
-          {val}
-        </p>
+        <p className="text-[10px] text-gray-400 font-medium">{sub}</p>
       </div>
     </div>
   );
