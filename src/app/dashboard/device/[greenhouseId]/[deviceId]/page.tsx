@@ -14,6 +14,14 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
+  Layers,
+  FileText,
+  Filter,
+  CheckCircle2,
 } from "lucide-react";
 import Button from "@/src/components/ui/button";
 import {useGetGreenhouseDeviceDetails} from "@/src/hooks/use-device";
@@ -21,38 +29,41 @@ import Table, {TableColumn} from "@/src/components/ui/tabel";
 import {useState, useMemo, useEffect} from "react";
 import {motion, AnimatePresence} from "framer-motion";
 import {useGetGreenhouseDeviceComponentSensor} from "@/src/hooks/use-deviceComponentSensor";
-import mqtt from "mqtt";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
+type PeriodType = "24h" | "7d" | "30d" | "all";
+
 export default function DeviceDetailPage() {
   const params = useParams();
   const router = useRouter();
 
-  // -- States --
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [historyLogs, setHistoryLogs] = useState<any>(null);
-  const [isCompDetailOpen, setIsCompDetailOpen] = useState(false);
-  const [selectedComp, setSelectedComp] = useState<any>(null);
-
-  // -- Pagination States --
-  const [mainTablePage, setMainTablePage] = useState(1);
-  const [sensorPage, setSensorPage] = useState(1);
-  const itemsPerPage = 5;
-
   const deviceId = params.deviceId as string;
   const greenhouseId = params.greenhouseId as string;
 
-  const [chartData, setChartData] = useState<{time: string; value: number}[]>(
-    [],
-  );
+  // -- Modal States --
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyLogs, setHistoryLogs] = useState<any>(null);
+
+  // -- Sensor Log Table Modal State --
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [modalSelectedComp, setModalSelectedComp] = useState<any>(null);
+  const [modalSensorPage, setModalSensorPage] = useState(1);
+
+  // -- Main Chart States --
+  const [activeSensorId, setActiveSensorId] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("24h");
+
+  // -- Pagination States --
+  const [mainTablePage, setMainTablePage] = useState(1);
+  const itemsPerPage = 5;
 
   // --- DATA FETCHING (Profil Device Utama) ---
   const {
@@ -62,15 +73,104 @@ export default function DeviceDetailPage() {
   } = useGetGreenhouseDeviceDetails(deviceId);
   const device: any = (response as any)?.data || response;
 
-  // --- DATA FETCHING (Sensor Log dari DB untuk Modal) ---
-  const {data: sensorResponse, isLoading: isLoadingSensor} =
+  // Filter only SENSOR components
+  const sensorComponents: any[] = useMemo(() => {
+    return (device?.components || []).filter(
+      (comp: any) => comp.type === "SENSOR",
+    );
+  }, [device?.components]);
+
+  // Set default active sensor once device data is loaded
+  useEffect(() => {
+    if (sensorComponents.length > 0 && !activeSensorId) {
+      setActiveSensorId(sensorComponents[0].id);
+    }
+  }, [sensorComponents, activeSensorId]);
+
+  // Active sensor object for chart
+  const activeSensor = useMemo(() => {
+    return (
+      sensorComponents.find((c) => c.id === activeSensorId) ||
+      sensorComponents[0] ||
+      null
+    );
+  }, [sensorComponents, activeSensorId]);
+
+  // --- DATA FETCHING: Historical Data for Main Chart ---
+  const {data: chartHistoryResponse, isLoading: isLoadingChart} =
     useGetGreenhouseDeviceComponentSensor(
       greenhouseId,
-      selectedComp?.id,
-      sensorPage,
+      activeSensor?.id,
+      1,
+      150, // Fetch ample historical data points for chart
+      selectedPeriod,
     );
-  const sensorDataArray: any[] = (sensorResponse as any)?.data?.data || (sensorResponse as any)?.data || [];
-  const sensorPagination = (sensorResponse as any)?.data?.pagination || (sensorResponse as any)?.pagination;
+
+  const chartRawData: any[] =
+    (chartHistoryResponse as any)?.data?.data ||
+    (chartHistoryResponse as any)?.data ||
+    [];
+
+  // Prepare chart formatted data (reverse so oldest is left, newest is right)
+  const chartPoints = useMemo(() => {
+    if (!Array.isArray(chartRawData)) return [];
+    return [...chartRawData].reverse().map((item: any) => {
+      const date = new Date(item.createdAt || item.deviceTime || Date.now());
+      return {
+        id: item.id,
+        rawDate: date,
+        time:
+          selectedPeriod === "24h"
+            ? date
+                .toLocaleTimeString("id-ID", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: false,
+                })
+                .replace(/\./g, ":")
+            : date.toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }),
+        value: Number(item.value),
+      };
+    });
+  }, [chartRawData, selectedPeriod]);
+
+  // Summary statistics (Latest, Min, Max, Average)
+  const chartStats = useMemo(() => {
+    if (chartPoints.length === 0) {
+      return {latest: null, avg: null, min: null, max: null};
+    }
+    const values = chartPoints.map((p) => p.value);
+    const latest = values[values.length - 1];
+    const sum = values.reduce((acc, curr) => acc + curr, 0);
+    const avg = sum / values.length;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    return {latest, avg, min, max};
+  }, [chartPoints]);
+
+  // --- DATA FETCHING: Sensor Log Modal Data ---
+  const {data: modalSensorResponse, isLoading: isLoadingModalSensor} =
+    useGetGreenhouseDeviceComponentSensor(
+      greenhouseId,
+      modalSelectedComp?.id,
+      modalSensorPage,
+      10,
+      "all",
+    );
+  const modalSensorDataArray: any[] =
+    (modalSensorResponse as any)?.data?.data ||
+    (modalSensorResponse as any)?.data ||
+    [];
+  const modalSensorPagination =
+    (modalSensorResponse as any)?.data?.pagination ||
+    (modalSensorResponse as any)?.pagination;
 
   // --- CLIENT-SIDE PAGINATION LOGIC (Main Table) ---
   const {paginatedComponents, totalMainPages} = useMemo(() => {
@@ -84,69 +184,16 @@ export default function DeviceDetailPage() {
   }, [device?.components, mainTablePage]);
 
   // --- HANDLERS ---
-  const handleOpenCompDetail = (component: any) => {
-    setSelectedComp(component);
-    setSensorPage(1);
-    setIsCompDetailOpen(true);
+  const handleOpenLogModal = (component: any) => {
+    setModalSelectedComp(component);
+    setModalSensorPage(1);
+    setIsLogModalOpen(true);
   };
 
   const handleOpenedHistory = (data: any, y: boolean) => {
     setIsHistoryOpen(y);
     setHistoryLogs(data);
   };
-
-  // --- MQTT Real-time Chart ---
-  useEffect(() => {
-    if (
-      !isCompDetailOpen ||
-      !device?.macAddress ||
-      !selectedComp ||
-      selectedComp.type !== "SENSOR"
-    )
-      return;
-
-    const brokerUrl = "wss://urken.psti-ubl.id/ws-rabbitmq";
-    const client = mqtt.connect(brokerUrl, {
-      username: "/smk2pkl:smk2iot",
-      password: "smk2iot",
-      clientId: `web_${Math.random().toString(16).slice(3)}`,
-    });
-
-    client.on("connect", () => {
-      const topic = `sensor/${device.macAddress}`;
-      client.subscribe(topic);
-      console.log(`✅ MQTT Connected! Listening topic: ${topic}`);
-    });
-
-    client.on("message", (topic, message) => {
-      try {
-        const payload = JSON.parse(message.toString());
-        const targetKey = selectedComp.id;
-        const incomingValue = payload[targetKey];
-
-        if (incomingValue !== undefined) {
-          setChartData((prev) => {
-            const newData = [
-              ...prev,
-              {
-                time: new Date().toLocaleTimeString("id-ID", {hour12: false}),
-                value: Number(incomingValue),
-              },
-            ];
-            return newData.slice(-15);
-          });
-        }
-      } catch (err) {
-        console.error("❌ Failed to parse MQTT message", err);
-      }
-    });
-
-    return () => {
-      console.log("🔌 Cleaning up MQTT connection...");
-      client.end();
-      setChartData([]);
-    };
-  }, [isCompDetailOpen, device?.macAddress, selectedComp]);
 
   // --- COLUMNS CONFIG (Main Table Components) ---
   const columns: TableColumn<any>[] = [
@@ -155,7 +202,11 @@ export default function DeviceDetailPage() {
       cell: (row) => (
         <div className="flex items-center gap-3">
           <div
-            className={`p-2 rounded-lg ${row.type === "SENSOR" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"}`}
+            className={`p-2 rounded-lg ${
+              row.type === "SENSOR"
+                ? "bg-blue-50 text-blue-600"
+                : "bg-orange-50 text-orange-600"
+            }`}
           >
             {row.type === "SENSOR" ? (
               <Activity className="w-4 h-4" />
@@ -188,7 +239,7 @@ export default function DeviceDetailPage() {
     {
       header: "Pin/Key",
       cell: (row) => (
-        <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">
+        <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">
           {row.pin || "Auto"}
         </code>
       ),
@@ -199,14 +250,34 @@ export default function DeviceDetailPage() {
       cell: (row) => (
         <div className="flex items-center justify-end gap-2">
           {row.type === "SENSOR" ? (
-            <Button
-              onClick={() => handleOpenCompDetail(row)}
-              variant="ghost"
-              className="p-2 text-emerald-600 hover:bg-emerald-50"
-              title="Real-time Monitor"
-            >
-              <Activity className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                onClick={() => {
+                  setActiveSensorId(row.id);
+                  const el = document.getElementById("sensor-chart-section");
+                  if (el) el.scrollIntoView({behavior: "smooth"});
+                }}
+                variant="ghost"
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                  activeSensorId === row.id
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "text-gray-600 border-gray-200 hover:bg-gray-50"
+                }`}
+                title="Tampilkan di Grafik"
+              >
+                <BarChart3 className="w-3.5 h-3.5 mr-1" />
+                Grafik
+              </Button>
+              <Button
+                onClick={() => handleOpenLogModal(row)}
+                variant="ghost"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-xs"
+                title="Lihat Riwayat Log Tabel"
+              >
+                <FileText className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                Riwayat Log
+              </Button>
+            </div>
           ) : (
             <span className="text-xs text-gray-400">-</span>
           )}
@@ -222,10 +293,14 @@ export default function DeviceDetailPage() {
       cell: (row) => (
         <div className="flex items-center gap-2">
           <div
-            className={`h-2 w-2 rounded-full ${row.state === "ONLINE" ? "bg-green-500" : "bg-red-500"}`}
+            className={`h-2 w-2 rounded-full ${
+              row.state === "ONLINE" ? "bg-green-500" : "bg-red-500"
+            }`}
           />
           <span
-            className={`text-xs font-bold ${row.state === "ONLINE" ? "text-green-600" : "text-red-600"}`}
+            className={`text-xs font-bold ${
+              row.state === "ONLINE" ? "text-green-600" : "text-red-600"
+            }`}
           >
             {row.state}
           </span>
@@ -284,7 +359,7 @@ export default function DeviceDetailPage() {
     );
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* 1. HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-4">
@@ -300,7 +375,7 @@ export default function DeviceDetailPage() {
               {device.name}
             </h1>
             <p className="text-gray-500 text-sm">
-              Hardware Configuration Node
+              Hardware Configuration & Sensor Analytics Node
             </p>
           </div>
         </div>
@@ -331,7 +406,7 @@ export default function DeviceDetailPage() {
           color="text-blue-500 bg-blue-50"
         />
         <InfoCard
-          label="Location"
+          label="Location Area"
           val={device.area?.name || "Global Node"}
           icon={MapPin}
           color="text-orange-500 bg-orange-50"
@@ -360,16 +435,325 @@ export default function DeviceDetailPage() {
         </div>
       </div>
 
-      {/* 3. HARDWARE COMPONENTS TABLE */}
+      {/* 3. HISTORICAL SENSOR CHARTS & ANALYTICS SECTION (MAIN PAGE) */}
+      <div id="sensor-chart-section" className="space-y-4 pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+          <div>
+            <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-emerald-600" />
+              Sensor Historical Analytics
+            </h3>
+            <p className="text-xs text-gray-500">
+              Grafik riwayat telemetri sensor tersimpan berdasarkan periode waktu
+            </p>
+          </div>
+
+          {activeSensor && (
+            <Button
+              onClick={() => handleOpenLogModal(activeSensor)}
+              variant="ghost"
+              className="self-start sm:self-auto px-3.5 py-1.5 text-xs font-bold bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl shadow-xs"
+            >
+              <FileText className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+              Buka Tabel Log Riwayat
+            </Button>
+          )}
+        </div>
+
+        {/* Sensor Component Switcher Tabs */}
+        {sensorComponents.length > 0 ? (
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+            {/* Tabs for multiple sensor components */}
+            {sensorComponents.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-gray-100">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5" /> Sensor:
+                </span>
+                {sensorComponents.map((comp) => {
+                  const isActive = comp.id === activeSensor?.id;
+                  return (
+                    <button
+                      key={comp.id}
+                      onClick={() => setActiveSensorId(comp.id)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                        isActive
+                          ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                          : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100"
+                      }`}
+                    >
+                      <Activity
+                        className={`w-3.5 h-3.5 ${
+                          isActive ? "text-white" : "text-gray-400"
+                        }`}
+                      />
+                      {comp.name}
+                      {comp.unit && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                            isActive
+                              ? "bg-emerald-600 text-emerald-100"
+                              : "bg-gray-200/70 text-gray-500"
+                          }`}
+                        >
+                          {comp.unit}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Active Sensor Overview & Filters Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-900 leading-tight">
+                      {activeSensor?.name || "Sensor Component"}
+                    </h4>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                        {activeSensor?.category || "Sensor"}
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600 uppercase">
+                        Satuan: {activeSensor?.unit || "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Period Filter Buttons */}
+              <div className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-2xl border border-gray-100 self-start md:self-auto">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-2 flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Periode:
+                </span>
+                {(
+                  [
+                    {key: "24h", label: "24 Jam"},
+                    {key: "7d", label: "7 Hari (Mingguan)"},
+                    {key: "30d", label: "30 Hari (Bulanan)"},
+                    {key: "all", label: "Semua"},
+                  ] as {key: PeriodType; label: string}[]
+                ).map((period) => (
+                  <button
+                    key={period.key}
+                    onClick={() => setSelectedPeriod(period.key)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      selectedPeriod === period.key
+                        ? "bg-white text-emerald-700 shadow-sm border border-emerald-100"
+                        : "text-gray-500 hover:text-gray-800 hover:bg-gray-100/60"
+                    }`}
+                  >
+                    {period.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick KPI Stat Pill Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatPill
+                label="Nilai Terkini"
+                val={
+                  chartStats.latest !== null
+                    ? `${chartStats.latest.toFixed(
+                        activeSensor?.category?.toLowerCase().includes("ph")
+                          ? 2
+                          : 1,
+                      )} ${activeSensor?.unit || ""}`
+                    : "-"
+                }
+                icon={TrendingUp}
+                color="text-emerald-600 bg-emerald-50"
+              />
+              <StatPill
+                label="Rata-rata (Avg)"
+                val={
+                  chartStats.avg !== null
+                    ? `${chartStats.avg.toFixed(
+                        activeSensor?.category?.toLowerCase().includes("ph")
+                          ? 2
+                          : 1,
+                      )} ${activeSensor?.unit || ""}`
+                    : "-"
+                }
+                icon={Activity}
+                color="text-blue-600 bg-blue-50"
+              />
+              <StatPill
+                label="Minimum"
+                val={
+                  chartStats.min !== null
+                    ? `${chartStats.min.toFixed(
+                        activeSensor?.category?.toLowerCase().includes("ph")
+                          ? 2
+                          : 1,
+                      )} ${activeSensor?.unit || ""}`
+                    : "-"
+                }
+                icon={TrendingDown}
+                color="text-cyan-600 bg-cyan-50"
+              />
+              <StatPill
+                label="Maksimum"
+                val={
+                  chartStats.max !== null
+                    ? `${chartStats.max.toFixed(
+                        activeSensor?.category?.toLowerCase().includes("ph")
+                          ? 2
+                          : 1,
+                      )} ${activeSensor?.unit || ""}`
+                    : "-"
+                }
+                icon={TrendingUp}
+                color="text-rose-600 bg-rose-50"
+              />
+            </div>
+
+            {/* Recharts Historical Chart */}
+            <div className="bg-gray-50/50 border border-gray-100 rounded-3xl p-4 sm:p-6 min-h-[340px] flex flex-col justify-center">
+              {isLoadingChart ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3 animate-pulse">
+                  <Activity className="w-8 h-8 text-emerald-400 animate-spin" />
+                  <p className="text-xs font-semibold">
+                    Memuat riwayat telemetri dari database...
+                  </p>
+                </div>
+              ) : chartPoints.length > 0 ? (
+                <div className="h-[320px] sm:h-[360px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartPoints}
+                      margin={{top: 15, right: 15, left: -20, bottom: 5}}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="sensorAreaGrad"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#10b981"
+                            stopOpacity={0.35}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#10b981"
+                            stopOpacity={0.0}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e5e7eb"
+                      />
+                      <XAxis
+                        dataKey="time"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        stroke="#9ca3af"
+                        dy={8}
+                      />
+                      <YAxis
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        stroke="#9ca3af"
+                        dx={-4}
+                        unit={activeSensor?.unit ? ` ${activeSensor.unit}` : ""}
+                      />
+                      <Tooltip
+                        content={({active, payload}) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl border border-gray-800 text-xs space-y-1">
+                                <p className="text-[10px] text-gray-400 font-mono">
+                                  {data.time}
+                                </p>
+                                <p className="font-bold text-sm text-emerald-400">
+                                  {data.value}{" "}
+                                  <span className="text-xs text-gray-300">
+                                    {activeSensor?.unit}
+                                  </span>
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#059669"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#sensorAreaGrad)"
+                        dot={{
+                          r: 3,
+                          fill: "#059669",
+                          strokeWidth: 1.5,
+                          stroke: "#fff",
+                        }}
+                        activeDot={{
+                          r: 6,
+                          stroke: "#fff",
+                          strokeWidth: 2,
+                          fill: "#10b981",
+                        }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2 border border-dashed border-gray-200 rounded-2xl bg-white">
+                  <BarChart3 className="w-10 h-10 text-gray-300" />
+                  <p className="text-sm font-semibold text-gray-600">
+                    Belum ada data riwayat untuk periode ini
+                  </p>
+                  <p className="text-xs text-gray-400 text-center max-w-sm">
+                    Data sensor akan otomatis terisi saat ESP32 mengirim
+                    telemetri ke sistem.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white p-8 rounded-3xl border border-gray-100 text-center text-gray-400 space-y-2 shadow-sm">
+            <Cpu className="w-10 h-10 text-gray-300 mx-auto" />
+            <p className="font-bold text-gray-700">
+              Tidak Ada Komponen Sensor Terpasang
+            </p>
+            <p className="text-xs text-gray-400">
+              Tambahkan komponen bertipe SENSOR pada node ini untuk melihat grafik
+              riwayat.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 4. HARDWARE COMPONENTS TABLE */}
       <motion.div
         initial={{opacity: 0, y: 20}}
         animate={{opacity: 1, y: 0}}
         transition={{duration: 0.4}}
-        className="space-y-4"
+        className="space-y-4 pt-2"
       >
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-emerald-500" /> Attached Hardware
+          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <Cpu className="w-5 h-5 text-emerald-600" /> Attached Hardware
             Components
           </h3>
         </div>
@@ -403,7 +787,11 @@ export default function DeviceDetailPage() {
                     <button
                       key={pageNum}
                       onClick={() => setMainTablePage(pageNum)}
-                      className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${mainTablePage === pageNum ? "bg-emerald-500 text-white shadow-md" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                      className={`h-8 w-8 rounded-lg text-xs font-bold transition-all ${
+                        mainTablePage === pageNum
+                          ? "bg-emerald-500 text-white shadow-md"
+                          : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                      }`}
                     >
                       {pageNum}
                     </button>
@@ -423,9 +811,7 @@ export default function DeviceDetailPage() {
         )}
       </motion.div>
 
-
-
-      {/* --- 5. MODAL CONNECTION LOGS --- */}
+      {/* --- 5. MODAL CONNECTION LOGS (STATUS LOGS) --- */}
       <AnimatePresence>
         {isHistoryOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -440,9 +826,14 @@ export default function DeviceDetailPage() {
                   <div className="p-2.5 bg-purple-50 rounded-xl text-purple-600 border border-purple-100">
                     <History className="w-5 h-5" />
                   </div>
-                  <h3 className="font-bold text-gray-800">
-                    Node Connection Logs
-                  </h3>
+                  <div>
+                    <h3 className="font-bold text-gray-800">
+                      Node Connection Logs
+                    </h3>
+                    <p className="text-[11px] text-gray-400">
+                      Riwayat koneksi hidup/mati node hardware
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => handleOpenedHistory([], false)}
@@ -472,226 +863,168 @@ export default function DeviceDetailPage() {
         )}
       </AnimatePresence>
 
-      {/* --- 6. MODAL SENSOR REAL-TIME MONITOR (MQTT) --- */}
+      {/* --- 6. MODAL SENSOR HISTORICAL LOG READINGS (POP-UP TABEL LOG) --- */}
       <AnimatePresence>
-        {isCompDetailOpen && selectedComp && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md">
+        {isLogModalOpen && modalSelectedComp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <motion.div
               initial={{opacity: 0, scale: 0.95, y: 20}}
               animate={{opacity: 1, scale: 1, y: 0}}
               exit={{opacity: 0, scale: 0.95, y: 20}}
-              className="bg-white sm:rounded-3xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col h-full sm:h-auto max-h-[95vh] border border-gray-100"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-100"
             >
-              <div className="px-8 py-5 border-b flex items-center justify-between bg-white sticky top-0 z-10">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 ring-1 ring-emerald-100 shadow-inner">
-                    <Activity className="w-6 h-6" />
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b flex items-center justify-between bg-white sticky top-0 z-10">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600 ring-1 ring-emerald-100">
+                    <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-xl text-gray-900 tracking-tight">
-                      {selectedComp.name}
+                    <h3 className="font-extrabold text-lg text-gray-900 tracking-tight">
+                      Riwayat Log Sensor: {modalSelectedComp.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-md font-black uppercase tracking-wider">
-                        {selectedComp.category || "Uncategorized"}
+                      <span className="text-[10px] bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-md font-bold uppercase">
+                        {modalSelectedComp.category || "Sensor"}
                       </span>
-                      <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
-                        • Unit: {selectedComp.unit || "N/A"}
+                      <span className="text-[10px] text-emerald-600 font-bold uppercase">
+                        • Satuan: {modalSelectedComp.unit || "N/A"}
                       </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsCompDetailOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-7 h-7" />
-                </button>
-              </div>
-
-              <div className="p-6 sm:p-8 overflow-y-auto flex-grow bg-gray-50/30">
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
-                  <div className="lg:col-span-3 space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                      <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-emerald-500" />{" "}
-                        Real-time Performance Analysis
-                      </h4>
-                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 animate-pulse">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
-                        Live MQTT Stream
-                      </span>
-                    </div>
-
-                    <div className="bg-white border border-gray-100 rounded-3xl h-[300px] lg:h-[420px] p-5 shadow-sm">
-                      {chartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={chartData}
-                            margin={{top: 10, right: 10, left: -20, bottom: 0}}
-                          >
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                              stroke="#f5f5f5"
-                            />
-                            <XAxis
-                              dataKey="time"
-                              fontSize={10}
-                              tickLine={false}
-                              axisLine={false}
-                              stroke="#a0a0a0"
-                              dy={10}
-                            />
-                            <YAxis
-                              fontSize={10}
-                              tickLine={false}
-                              axisLine={false}
-                              stroke="#a0a0a0"
-                              dx={-5}
-                              unit={selectedComp.unit}
-                            />
-                            <Tooltip
-                              contentStyle={{
-                                borderRadius: "12px",
-                                border: "none",
-                                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-                              }}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="value"
-                              stroke="#10b981"
-                              strokeWidth={3}
-                              dot={{
-                                r: 4,
-                                fill: "#10b981",
-                                strokeWidth: 2,
-                                stroke: "#fff",
-                              }}
-                              activeDot={{r: 6, stroke: "#fff", strokeWidth: 2}}
-                              animationDuration={300}
-                              isAnimationActive={true}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
-                          <Activity className="w-10 h-10 animate-pulse text-emerald-300" />
-                          <p className="text-sm font-medium">
-                            Awaiting incoming MQTT data...
-                          </p>
-                          <code className="text-[10px] mt-1 bg-white px-3 py-1 rounded-md border border-gray-100 shadow-xs font-mono">
-                            Topic: sensor/{device.macAddress} (Key:{" "}
-                            {selectedComp.id})
-                          </code>
-                        </div>
+                      {modalSensorPagination && (
+                        <span className="text-[10px] text-gray-400">
+                          (Total {modalSensorPagination.totalData} logs)
+                        </span>
                       )}
                     </div>
                   </div>
+                </div>
+                <button
+                  onClick={() => setIsLogModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
 
-                  <div className="lg:col-span-2 flex flex-col h-full space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                      <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-emerald-500" /> Recent
-                        Logged Readings
-                      </h4>
-                    </div>
-
-                    <div className="flex-grow rounded-3xl border border-gray-100 overflow-hidden shadow-sm bg-white min-h-[300px]">
-                      <Table
-                        isLoading={isLoadingSensor}
-                        columns={[
-                          {
-                            header: "Timestamp",
-                            cell: (r: any) => (
-                              <div className="flex flex-col font-mono text-[11px]">
-                                <span className="font-bold text-gray-700">
-                                  {new Date(r.createdAt)
-                                    .toLocaleTimeString("id-ID", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      second: "2-digit",
-                                      hour12: false,
-                                    })
-                                    .replace(/\./g, ":")}
-                                </span>
-                                <span className="text-[9px] text-gray-400 uppercase font-sans">
-                                  {new Date(r.createdAt).toLocaleDateString(
-                                    "id-ID",
-                                    {day: "2-digit", month: "short"},
-                                  )}
-                                </span>
-                              </div>
-                            ),
-                          },
-                          {
-                            header: "Value",
-                            cell: (r: any) => (
-                              <span className="font-black text-emerald-600 text-sm tracking-tight">
-                                {Number(r.value).toFixed(
-                                  selectedComp.category
-                                    ?.toLowerCase()
-                                    .includes("ph")
-                                    ? 2
-                                    : 1,
-                                )}{" "}
-                                <span className="text-[10px] font-medium text-gray-400 font-sans">
-                                  {selectedComp.unit}
-                                </span>
+              {/* Modal Body: Data Table */}
+              <div className="p-6 overflow-y-auto flex-grow bg-gray-50/40 custom-scrollbar">
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-xs">
+                  <Table
+                    isLoading={isLoadingModalSensor}
+                    columns={[
+                      {
+                        header: "Timestamp Waktu",
+                        cell: (r: any) => {
+                          const date = new Date(
+                            r.createdAt || r.deviceTime || Date.now(),
+                          );
+                          return (
+                            <div className="flex flex-col font-mono text-[11px]">
+                              <span className="font-bold text-gray-800">
+                                {date
+                                  .toLocaleTimeString("id-ID", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                    hour12: false,
+                                  })
+                                  .replace(/\./g, ":")}
                               </span>
-                            ),
-                          },
-                          {
-                            header: "Status",
-                            cell: () => (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/10">
-                                VALID
+                              <span className="text-[9px] text-gray-400 uppercase font-sans">
+                                {date.toLocaleDateString("id-ID", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
                               </span>
-                            ),
-                          },
-                        ]}
-                        data={Array.isArray(sensorDataArray) ? sensorDataArray : []}
-                      />
-                    </div>
-
-                    {sensorPagination && sensorPagination.totalPages > 1 && (
-                      <div className="flex items-center justify-between bg-white p-2.5 rounded-2xl border border-gray-100 shadow-sm mt-auto">
-                        <p className="text-[10px] text-gray-500 font-bold ml-2">
-                          Page {sensorPagination.currentPage}{" "}
-                          <span className="text-gray-300 mx-1">/</span>{" "}
-                          {sensorPagination.totalPages}
-                        </p>
-                        <div className="flex gap-1.5">
-                          <Button
-                            variant="ghost"
-                            className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-sm ${sensorPage === 1 ? "opacity-50" : "hover:bg-emerald-50"}`}
-                            disabled={sensorPage === 1}
-                            onClick={() => setSensorPage((p) => p - 1)}
-                          >
-                            <ChevronLeft className="w-4 h-4 text-gray-600" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-sm ${sensorPage >= sensorPagination.totalPages ? "opacity-50" : "hover:bg-emerald-50"}`}
-                            disabled={sensorPage >= sensorPagination.totalPages}
-                            onClick={() => setSensorPage((p) => p + 1)}
-                          >
-                            <ChevronRight className="w-4 h-4 text-gray-600" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                            </div>
+                          );
+                        },
+                      },
+                      {
+                        header: "Nilai Terbaca",
+                        cell: (r: any) => (
+                          <span className="font-black text-emerald-600 text-sm tracking-tight font-mono">
+                            {Number(r.value).toFixed(
+                              modalSelectedComp.category
+                                ?.toLowerCase()
+                                .includes("ph")
+                                ? 2
+                                : 1,
+                            )}{" "}
+                            <span className="text-[10px] font-bold text-gray-400 font-sans uppercase">
+                              {modalSelectedComp.unit}
+                            </span>
+                          </span>
+                        ),
+                      },
+                      {
+                        header: "Status Data",
+                        cell: () => (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                            VALID
+                          </span>
+                        ),
+                      },
+                    ]}
+                    data={
+                      Array.isArray(modalSensorDataArray)
+                        ? modalSensorDataArray
+                        : []
+                    }
+                    emptyMessage="Belum ada data log telemetri yang tercatat untuk sensor ini."
+                  />
                 </div>
               </div>
 
-              <div className="px-8 py-5 bg-gray-50/50 border-t flex justify-end gap-3 sticky bottom-0 z-10">
+              {/* Modal Footer: Pagination & Close */}
+              <div className="px-6 py-4 bg-white border-t flex items-center justify-between gap-3 sticky bottom-0 z-10">
+                {modalSensorPagination &&
+                modalSensorPagination.totalPages > 1 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 font-medium">
+                      Halaman {modalSensorPagination.currentPage} dari{" "}
+                      {modalSensorPagination.totalPages}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-xs ${
+                          modalSensorPage === 1
+                            ? "opacity-40"
+                            : "hover:bg-emerald-50"
+                        }`}
+                        disabled={modalSensorPage === 1}
+                        onClick={() => setModalSensorPage((p) => p - 1)}
+                      >
+                        <ChevronLeft className="w-4 h-4 text-gray-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className={`h-8 w-8 p-0 rounded-lg bg-white border shadow-xs ${
+                          modalSensorPage >= modalSensorPagination.totalPages
+                            ? "opacity-40"
+                            : "hover:bg-emerald-50"
+                        }`}
+                        disabled={
+                          modalSensorPage >= modalSensorPagination.totalPages
+                        }
+                        onClick={() => setModalSensorPage((p) => p + 1)}
+                      >
+                        <ChevronRight className="w-4 h-4 text-gray-600" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div />
+                )}
+
                 <button
-                  onClick={() => setIsCompDetailOpen(false)}
-                  className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-all active:scale-95"
+                  onClick={() => setIsLogModalOpen(false)}
+                  className="px-5 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-gray-800 transition-all active:scale-95 shadow-sm"
                 >
-                  Close Monitor
+                  Tutup
                 </button>
               </div>
             </motion.div>
@@ -721,3 +1054,22 @@ function InfoCard({label, val, icon: Icon, color}: any) {
     </div>
   );
 }
+
+function StatPill({label, val, icon: Icon, color}: any) {
+  return (
+    <div className="bg-white p-3.5 rounded-2xl border border-gray-100 flex items-center gap-3 shadow-xs">
+      <div className={`p-2 rounded-xl ${color}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div>
+        <p className="text-[9px] uppercase font-extrabold text-gray-400 tracking-wider">
+          {label}
+        </p>
+        <p className="text-sm font-black text-gray-800 font-mono mt-0.5">
+          {val}
+        </p>
+      </div>
+    </div>
+  );
+}
+
