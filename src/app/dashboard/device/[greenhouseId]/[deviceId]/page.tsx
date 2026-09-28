@@ -311,7 +311,7 @@ export default function DeviceDetailPage() {
       header: "Timestamp",
       cell: (row) => {
         if (!row.createAt) return "-";
-        const date = new Date(row.createAt.replace("Z", ""));
+        const date = new Date(row.createAt);
         return (
           <div className="flex flex-col">
             <span className="text-[11px] font-bold text-gray-700 font-mono">
