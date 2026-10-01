@@ -167,13 +167,20 @@ export default function DeviceDetailPage() {
     };
   }, [activeSensor]);
 
+  // Dynamic limit based on period: 24h = 300 points (288 for 5m interval), 7d = 2100 points, 30d/all = 5000
+  const chartFetchLimit = useMemo(() => {
+    if (selectedPeriod === "24h") return 300;
+    if (selectedPeriod === "7d") return 2100;
+    return 5000;
+  }, [selectedPeriod]);
+
   // --- DATA FETCHING: Historical Data for Main Chart ---
   const {data: chartHistoryResponse, isLoading: isLoadingChart} =
     useGetGreenhouseDeviceComponentSensor(
       greenhouseId,
       activeSensor?.id,
       1,
-      150,
+      chartFetchLimit,
       selectedPeriod,
     );
 
